@@ -2,10 +2,11 @@
 
 // Command gen produces encode_amd64.s with go-asmgen: Lemire's vectorised base64
 // encode, both an SSE2/SSSE3 path (12 input bytes -> 16 chars per 128-bit block)
-// and a 3x-unrolled AVX2 path (24 -> 32 per 256-bit block, VPERMD to cross-lane
-// the input). Each: PSHUFB/VPSHUFB spread, two multiplies pull out the 6-bit
-// indices, a PSHUFB offset-LUT maps each to its ASCII byte. Constant tables come
-// from emit.File.Data. Run: go run encode_gen.go
+// and a 2x-unrolled AVX2 path (24 -> 32 per 256-bit block). The AVX2 input is
+// placed lane0=bytes0-15, lane1=bytes12-27 with VMOVDQU + VINSERTI128 (no
+// cross-lane VPERMD, which would bottleneck the shuffle port). Each: PSHUFB spread,
+// two multiplies pull out the 6-bit indices, a PSHUFB offset-LUT maps each to its
+// ASCII byte. Constant tables come from emit.File.Data. Run: go run encode_gen.go
 package main
 
 import (
@@ -87,8 +88,7 @@ func main() {
 		Label("sdone").Ret()
 	f.Add(s.Func())
 
-	// ---- AVX2: 24 -> 32, 3x-unrolled ----
-	perm := f.Data("perm", []byte{0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 0})
+	// ---- AVX2: 24 -> 32, 2x-unrolled, VPERMD-free ----
 	shuf2 := f.Data("shuf2", rep(shufBytes, 2))
 	m1b := f.Data("mask1b", rep(mask1Bytes, 8))
 	mhb := f.Data("mulhib", rep(mulhiBytes, 8))
@@ -98,81 +98,49 @@ func main() {
 	c25b := f.Data("c25b", repByte(25, 32))
 	lutb := f.Data("lutb", rep(lutBytes, 2))
 
-	// Registers: perm Y9, mask1 Y10, mulhi Y11, mask2 Y12, mullo Y13, c51 Y14,
-	// lut Y15. shuf2 and c25 stay in memory (used as operands) so all of Y0-Y8 are
-	// free for three interleaved blocks A(Y0-2) B(Y3-5) C(Y6-8).
+	// VMOVDQU + VINSERTI128 place lane0=bytes0-15, lane1=bytes12-27 without VPERMD.
+	// Dropping perm frees a register, so all eight constants stay in YMM (Y8-Y15);
+	// two independent blocks (A=Y0-2, B=Y3-5) interleave per iteration for ILP.
 	vv := amd64.NewFunc("encodeBlocksAVX2", sig(), 0)
 	vv.LoadArg("dst_base", "DI").LoadArg("src_base", "SI").LoadArg("n", "CX").
-		Raw("VMOVDQU %s+0(SB), Y9", perm).
-		Raw("VMOVDQU %s+0(SB), Y10", m1b).
-		Raw("VMOVDQU %s+0(SB), Y11", mhb).
-		Raw("VMOVDQU %s+0(SB), Y12", m2b).
-		Raw("VMOVDQU %s+0(SB), Y13", mlb).
-		Raw("VMOVDQU %s+0(SB), Y14", c51b).
-		Raw("VMOVDQU %s+0(SB), Y15", lutb)
-
-	type blk struct{ d, a, b, soff, doff int }
-	bs := []blk{{0, 1, 2, 0, 0}, {3, 4, 5, 24, 32}, {6, 7, 8, 48, 64}}
-	vv.Label("vtriple").Raw("CMPQ CX, $3").Raw("JLT vtail")
-	for _, b := range bs {
-		vv.Raw("VMOVDQU %d(SI), Y%d", b.soff, b.d)
-	}
-	for _, b := range bs {
-		vv.Raw("VPERMD Y%d, Y9, Y%d", b.d, b.d)
-	}
-	for _, b := range bs {
-		vv.Raw("VPSHUFB %s+0(SB), Y%d, Y%d", shuf2, b.d, b.d)
-	}
-	for _, b := range bs {
-		vv.Raw("VPAND Y10, Y%d, Y%d", b.d, b.a)
-	}
-	for _, b := range bs {
-		vv.Raw("VPMULHUW Y11, Y%d, Y%d", b.a, b.a)
-	}
-	for _, b := range bs {
-		vv.Raw("VPAND Y12, Y%d, Y%d", b.d, b.b)
-	}
-	for _, b := range bs {
-		vv.Raw("VPMULLW Y13, Y%d, Y%d", b.b, b.b)
-	}
-	for _, b := range bs {
-		vv.Raw("VPOR Y%d, Y%d, Y%d", b.b, b.a, b.a) // idx
-	}
-	for _, b := range bs {
-		vv.Raw("VPSUBUSB Y14, Y%d, Y%d", b.a, b.d) // subs(idx,51)
-	}
-	for _, b := range bs {
-		vv.Raw("VPCMPGTB %s+0(SB), Y%d, Y%d", c25b, b.a, b.b) // idx>25
-	}
-	for _, b := range bs {
-		vv.Raw("VPSUBB Y%d, Y%d, Y%d", b.b, b.d, b.d) // bucket
-	}
-	for _, b := range bs {
-		vv.Raw("VPSHUFB Y%d, Y15, Y%d", b.d, b.d) // offsets = lut[bucket]
-	}
-	for _, b := range bs {
-		vv.Raw("VPADDB Y%d, Y%d, Y%d", b.a, b.d, b.a) // ascii
-	}
-	for _, b := range bs {
-		vv.Raw("VMOVDQU Y%d, %d(DI)", b.a, b.doff)
-	}
-	vv.Raw("ADDQ $72, SI").Raw("ADDQ $96, DI").Raw("SUBQ $3, CX").Raw("JMP vtriple")
-
-	// 1x tail for the 0/1/2-block remainder.
-	vv.Label("vtail").Raw("TESTQ CX, CX").Raw("JZ vdone").
-		Raw("VMOVDQU (SI), Y0").
-		Raw("VPERMD Y0, Y9, Y0").
-		Raw("VPSHUFB %s+0(SB), Y0, Y0", shuf2).
-		Raw("VPAND Y10, Y0, Y1").Raw("VPMULHUW Y11, Y1, Y1").
-		Raw("VPAND Y12, Y0, Y2").Raw("VPMULLW Y13, Y2, Y2").
+		Raw("VMOVDQU %s+0(SB), Y8", shuf2).
+		Raw("VMOVDQU %s+0(SB), Y9", m1b).
+		Raw("VMOVDQU %s+0(SB), Y10", mhb).
+		Raw("VMOVDQU %s+0(SB), Y11", m2b).
+		Raw("VMOVDQU %s+0(SB), Y12", mlb).
+		Raw("VMOVDQU %s+0(SB), Y13", c51b).
+		Raw("VMOVDQU %s+0(SB), Y14", c25b).
+		Raw("VMOVDQU %s+0(SB), Y15", lutb).
+		Label("vpair").
+		Raw("CMPQ CX, $2").Raw("JLT vsingle").
+		Raw("VMOVDQU (SI), Y0").Raw("VINSERTI128 $1, 12(SI), Y0, Y0").
+		Raw("VMOVDQU 24(SI), Y3").Raw("VINSERTI128 $1, 36(SI), Y3, Y3").
+		Raw("VPSHUFB Y8, Y0, Y0").Raw("VPSHUFB Y8, Y3, Y3").
+		Raw("VPAND Y9, Y0, Y1").Raw("VPMULHUW Y10, Y1, Y1").
+		Raw("VPAND Y9, Y3, Y4").Raw("VPMULHUW Y10, Y4, Y4").
+		Raw("VPAND Y11, Y0, Y2").Raw("VPMULLW Y12, Y2, Y2").
+		Raw("VPAND Y11, Y3, Y5").Raw("VPMULLW Y12, Y5, Y5").
+		Raw("VPOR Y2, Y1, Y1").Raw("VPOR Y5, Y4, Y4"). // idxA, idxB
+		Raw("VPSUBUSB Y13, Y1, Y0").Raw("VPSUBUSB Y13, Y4, Y3").
+		Raw("VPCMPGTB Y14, Y1, Y2").Raw("VPCMPGTB Y14, Y4, Y5").
+		Raw("VPSUBB Y2, Y0, Y0").Raw("VPSUBB Y5, Y3, Y3"). // bucketA, bucketB
+		Raw("VPSHUFB Y0, Y15, Y0").Raw("VPSHUFB Y3, Y15, Y3").
+		Raw("VPADDB Y1, Y0, Y1").Raw("VPADDB Y4, Y3, Y4"). // asciiA, asciiB
+		Raw("VMOVDQU Y1, (DI)").Raw("VMOVDQU Y4, 32(DI)").
+		Raw("ADDQ $48, SI").Raw("ADDQ $64, DI").Raw("SUBQ $2, CX").Raw("JMP vpair").
+		Label("vsingle").
+		Raw("TESTQ CX, CX").Raw("JZ vdone").
+		Raw("VMOVDQU (SI), Y0").Raw("VINSERTI128 $1, 12(SI), Y0, Y0").
+		Raw("VPSHUFB Y8, Y0, Y0").
+		Raw("VPAND Y9, Y0, Y1").Raw("VPMULHUW Y10, Y1, Y1").
+		Raw("VPAND Y11, Y0, Y2").Raw("VPMULLW Y12, Y2, Y2").
 		Raw("VPOR Y2, Y1, Y1").
-		Raw("VPSUBUSB Y14, Y1, Y0").
-		Raw("VPCMPGTB %s+0(SB), Y1, Y2", c25b).
-		Raw("VPSUBB Y2, Y0, Y0").
-		Raw("VPSHUFB Y0, Y15, Y0").
-		Raw("VPADDB Y1, Y0, Y1").
-		Raw("VMOVDQU Y1, (DI)").
-		Raw("ADDQ $24, SI").Raw("ADDQ $32, DI").Raw("DECQ CX").Raw("JMP vtail").
+		Raw("VPSUBUSB Y13, Y1, Y3").
+		Raw("VPCMPGTB Y14, Y1, Y4").
+		Raw("VPSUBB Y4, Y3, Y3").
+		Raw("VPSHUFB Y3, Y15, Y5").
+		Raw("VPADDB Y1, Y5, Y5").
+		Raw("VMOVDQU Y5, (DI)").
 		Label("vdone").Raw("VZEROUPPER").Ret()
 	f.Add(vv.Func())
 
