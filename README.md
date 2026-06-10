@@ -18,6 +18,37 @@ four 24-bit lanes, two multiplies pull out the 6-bit indices, and a `PSHUFB`
 offset-LUT maps each to its ASCII byte (constants emitted via go-asmgen's
 `emit.File.Data`). Verified against `encoding/base64` (table + fuzz).
 
+## Performance
+
+Encode throughput on a 1 MiB random buffer, **native amd64** (GitHub Actions
+`ubuntu-latest`, AMD EPYC 7763, `GOAMD64=v1`), `-count=6`, median MB/s. The dev
+box is arm64, where this package's amd64 SSE kernel only runs under Rosetta
+(unrepresentative), so these numbers come from CI on native hardware — see
+[`.github/workflows/bench.yml`](.github/workflows/bench.yml).
+
+| implementation | kind | MB/s | vs stdlib |
+|---|---|---:|---:|
+| `encoding/base64` (stdlib) | scalar | 1183 | 1.00× |
+| this package (`BenchmarkEncode`) | pure-Go SIMD, SSE2/SSSE3 | **10576** | **8.94×** |
+| [`emmansun/base64`](https://github.com/emmansun/base64) | pure-Go SIMD (AVX2 here) | 19243 | 16.26× |
+| [`cristalhq/base64`](https://github.com/cristalhq/base64) | pure-Go scalar (Turbo-Base64) | 2647 | 2.24× |
+
+Honest caveats:
+
+- This package's kernel is **SSE2/SSSE3** only; on this `GOAMD64=v1` runner
+  that is the widest path it takes. [`emmansun/base64`](https://github.com/emmansun/base64)
+  is faster here because it dispatches to a wider **AVX2** kernel at runtime —
+  it is the more complete pure-Go SIMD base64 and an obvious next target (AVX2 +
+  the arm64 NEON path this package still lacks).
+- On the **arm64** dev box every amd64 SIMD path is irrelevant: this package
+  falls back to stdlib (~2960 MB/s), `emmansun` hits its NEON kernel
+  (~23000 MB/s), `cristalhq` its scalar path (~5600 MB/s). The arm64 NEON
+  encode for this package is still planned (see below).
+- cgo wrappers of [aklomp/base64](https://github.com/aklomp/base64) exist
+  ([`valpackett/go-base64-simd`](https://github.com/valpackett/go-base64-simd),
+  [`myzhan/base64`](https://github.com/myzhan/base64)) and are fast, but they
+  require a C toolchain (cgo) and are excluded from this pure-Go comparison.
+
 > Note: the arm64 NEON encode wants an integer vector multiply for the 6-bit
 > extraction; Go's arm64 assembler lacks `VMUL` today (a shift-based path or the
 > pending upstream `VMUL` patch resolves it).
