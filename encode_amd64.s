@@ -4,7 +4,7 @@
 
 #include "textflag.h"
 
-TEXT ·encodeBlocks(SB), NOSPLIT, $0-56
+TEXT ·encodeBlocksSSE(SB), NOSPLIT, $0-56
 	MOVQ dst_base+0(FP), DI
 	MOVQ src_base+24(FP), SI
 	MOVQ n+48(FP), CX
@@ -17,8 +17,8 @@ TEXT ·encodeBlocks(SB), NOSPLIT, $0-56
 	MOVOU c25<>+0(SB), X13
 	MOVOU lut<>+0(SB), X14
 	TESTQ CX, CX
-	JZ done
-loop:
+	JZ sdone
+sloop:
 	MOVOU (SI), X0
 	PSHUFB X7, X0
 	MOVO X0, X1
@@ -40,8 +40,46 @@ loop:
 	ADDQ $12, SI
 	ADDQ $16, DI
 	DECQ CX
-	JNZ loop
-done:
+	JNZ sloop
+sdone:
+	RET
+
+TEXT ·encodeBlocksAVX2(SB), NOSPLIT, $0-56
+	MOVQ dst_base+0(FP), DI
+	MOVQ src_base+24(FP), SI
+	MOVQ n+48(FP), CX
+	VMOVDQU perm<>+0(SB), Y7
+	VMOVDQU shuf2<>+0(SB), Y8
+	VMOVDQU mask1b<>+0(SB), Y9
+	VMOVDQU mulhib<>+0(SB), Y10
+	VMOVDQU mask2b<>+0(SB), Y11
+	VMOVDQU mullob<>+0(SB), Y12
+	VMOVDQU c51b<>+0(SB), Y13
+	VMOVDQU c25b<>+0(SB), Y14
+	VMOVDQU lutb<>+0(SB), Y15
+	TESTQ CX, CX
+	JZ vdone
+vloop:
+	VMOVDQU (SI), Y0
+	VPERMD Y0, Y7, Y0
+	VPSHUFB Y8, Y0, Y0
+	VPAND Y9, Y0, Y1
+	VPMULHUW Y10, Y1, Y1
+	VPAND Y11, Y0, Y2
+	VPMULLW Y12, Y2, Y2
+	VPOR Y2, Y1, Y1
+	VPSUBUSB Y13, Y1, Y3
+	VPCMPGTB Y14, Y1, Y4
+	VPSUBB Y4, Y3, Y3
+	VPSHUFB Y3, Y15, Y5
+	VPADDB Y1, Y5, Y5
+	VMOVDQU Y5, (DI)
+	ADDQ $24, SI
+	ADDQ $32, DI
+	DECQ CX
+	JNZ vloop
+vdone:
+	VZEROUPPER
 	RET
 
 DATA shuf<>+0(SB)/1, $0x01
@@ -187,4 +225,310 @@ DATA lut<>+13(SB)/1, $0xf0
 DATA lut<>+14(SB)/1, $0x00
 DATA lut<>+15(SB)/1, $0x00
 GLOBL lut<>(SB), RODATA|NOPTR, $16
+
+DATA perm<>+0(SB)/1, $0x00
+DATA perm<>+1(SB)/1, $0x00
+DATA perm<>+2(SB)/1, $0x00
+DATA perm<>+3(SB)/1, $0x00
+DATA perm<>+4(SB)/1, $0x01
+DATA perm<>+5(SB)/1, $0x00
+DATA perm<>+6(SB)/1, $0x00
+DATA perm<>+7(SB)/1, $0x00
+DATA perm<>+8(SB)/1, $0x02
+DATA perm<>+9(SB)/1, $0x00
+DATA perm<>+10(SB)/1, $0x00
+DATA perm<>+11(SB)/1, $0x00
+DATA perm<>+12(SB)/1, $0x03
+DATA perm<>+13(SB)/1, $0x00
+DATA perm<>+14(SB)/1, $0x00
+DATA perm<>+15(SB)/1, $0x00
+DATA perm<>+16(SB)/1, $0x03
+DATA perm<>+17(SB)/1, $0x00
+DATA perm<>+18(SB)/1, $0x00
+DATA perm<>+19(SB)/1, $0x00
+DATA perm<>+20(SB)/1, $0x04
+DATA perm<>+21(SB)/1, $0x00
+DATA perm<>+22(SB)/1, $0x00
+DATA perm<>+23(SB)/1, $0x00
+DATA perm<>+24(SB)/1, $0x05
+DATA perm<>+25(SB)/1, $0x00
+DATA perm<>+26(SB)/1, $0x00
+DATA perm<>+27(SB)/1, $0x00
+DATA perm<>+28(SB)/1, $0x06
+DATA perm<>+29(SB)/1, $0x00
+DATA perm<>+30(SB)/1, $0x00
+DATA perm<>+31(SB)/1, $0x00
+GLOBL perm<>(SB), RODATA|NOPTR, $32
+
+DATA shuf2<>+0(SB)/1, $0x01
+DATA shuf2<>+1(SB)/1, $0x00
+DATA shuf2<>+2(SB)/1, $0x02
+DATA shuf2<>+3(SB)/1, $0x01
+DATA shuf2<>+4(SB)/1, $0x04
+DATA shuf2<>+5(SB)/1, $0x03
+DATA shuf2<>+6(SB)/1, $0x05
+DATA shuf2<>+7(SB)/1, $0x04
+DATA shuf2<>+8(SB)/1, $0x07
+DATA shuf2<>+9(SB)/1, $0x06
+DATA shuf2<>+10(SB)/1, $0x08
+DATA shuf2<>+11(SB)/1, $0x07
+DATA shuf2<>+12(SB)/1, $0x0a
+DATA shuf2<>+13(SB)/1, $0x09
+DATA shuf2<>+14(SB)/1, $0x0b
+DATA shuf2<>+15(SB)/1, $0x0a
+DATA shuf2<>+16(SB)/1, $0x01
+DATA shuf2<>+17(SB)/1, $0x00
+DATA shuf2<>+18(SB)/1, $0x02
+DATA shuf2<>+19(SB)/1, $0x01
+DATA shuf2<>+20(SB)/1, $0x04
+DATA shuf2<>+21(SB)/1, $0x03
+DATA shuf2<>+22(SB)/1, $0x05
+DATA shuf2<>+23(SB)/1, $0x04
+DATA shuf2<>+24(SB)/1, $0x07
+DATA shuf2<>+25(SB)/1, $0x06
+DATA shuf2<>+26(SB)/1, $0x08
+DATA shuf2<>+27(SB)/1, $0x07
+DATA shuf2<>+28(SB)/1, $0x0a
+DATA shuf2<>+29(SB)/1, $0x09
+DATA shuf2<>+30(SB)/1, $0x0b
+DATA shuf2<>+31(SB)/1, $0x0a
+GLOBL shuf2<>(SB), RODATA|NOPTR, $32
+
+DATA mask1b<>+0(SB)/1, $0x00
+DATA mask1b<>+1(SB)/1, $0xfc
+DATA mask1b<>+2(SB)/1, $0xc0
+DATA mask1b<>+3(SB)/1, $0x0f
+DATA mask1b<>+4(SB)/1, $0x00
+DATA mask1b<>+5(SB)/1, $0xfc
+DATA mask1b<>+6(SB)/1, $0xc0
+DATA mask1b<>+7(SB)/1, $0x0f
+DATA mask1b<>+8(SB)/1, $0x00
+DATA mask1b<>+9(SB)/1, $0xfc
+DATA mask1b<>+10(SB)/1, $0xc0
+DATA mask1b<>+11(SB)/1, $0x0f
+DATA mask1b<>+12(SB)/1, $0x00
+DATA mask1b<>+13(SB)/1, $0xfc
+DATA mask1b<>+14(SB)/1, $0xc0
+DATA mask1b<>+15(SB)/1, $0x0f
+DATA mask1b<>+16(SB)/1, $0x00
+DATA mask1b<>+17(SB)/1, $0xfc
+DATA mask1b<>+18(SB)/1, $0xc0
+DATA mask1b<>+19(SB)/1, $0x0f
+DATA mask1b<>+20(SB)/1, $0x00
+DATA mask1b<>+21(SB)/1, $0xfc
+DATA mask1b<>+22(SB)/1, $0xc0
+DATA mask1b<>+23(SB)/1, $0x0f
+DATA mask1b<>+24(SB)/1, $0x00
+DATA mask1b<>+25(SB)/1, $0xfc
+DATA mask1b<>+26(SB)/1, $0xc0
+DATA mask1b<>+27(SB)/1, $0x0f
+DATA mask1b<>+28(SB)/1, $0x00
+DATA mask1b<>+29(SB)/1, $0xfc
+DATA mask1b<>+30(SB)/1, $0xc0
+DATA mask1b<>+31(SB)/1, $0x0f
+GLOBL mask1b<>(SB), RODATA|NOPTR, $32
+
+DATA mulhib<>+0(SB)/1, $0x40
+DATA mulhib<>+1(SB)/1, $0x00
+DATA mulhib<>+2(SB)/1, $0x00
+DATA mulhib<>+3(SB)/1, $0x04
+DATA mulhib<>+4(SB)/1, $0x40
+DATA mulhib<>+5(SB)/1, $0x00
+DATA mulhib<>+6(SB)/1, $0x00
+DATA mulhib<>+7(SB)/1, $0x04
+DATA mulhib<>+8(SB)/1, $0x40
+DATA mulhib<>+9(SB)/1, $0x00
+DATA mulhib<>+10(SB)/1, $0x00
+DATA mulhib<>+11(SB)/1, $0x04
+DATA mulhib<>+12(SB)/1, $0x40
+DATA mulhib<>+13(SB)/1, $0x00
+DATA mulhib<>+14(SB)/1, $0x00
+DATA mulhib<>+15(SB)/1, $0x04
+DATA mulhib<>+16(SB)/1, $0x40
+DATA mulhib<>+17(SB)/1, $0x00
+DATA mulhib<>+18(SB)/1, $0x00
+DATA mulhib<>+19(SB)/1, $0x04
+DATA mulhib<>+20(SB)/1, $0x40
+DATA mulhib<>+21(SB)/1, $0x00
+DATA mulhib<>+22(SB)/1, $0x00
+DATA mulhib<>+23(SB)/1, $0x04
+DATA mulhib<>+24(SB)/1, $0x40
+DATA mulhib<>+25(SB)/1, $0x00
+DATA mulhib<>+26(SB)/1, $0x00
+DATA mulhib<>+27(SB)/1, $0x04
+DATA mulhib<>+28(SB)/1, $0x40
+DATA mulhib<>+29(SB)/1, $0x00
+DATA mulhib<>+30(SB)/1, $0x00
+DATA mulhib<>+31(SB)/1, $0x04
+GLOBL mulhib<>(SB), RODATA|NOPTR, $32
+
+DATA mask2b<>+0(SB)/1, $0xf0
+DATA mask2b<>+1(SB)/1, $0x03
+DATA mask2b<>+2(SB)/1, $0x3f
+DATA mask2b<>+3(SB)/1, $0x00
+DATA mask2b<>+4(SB)/1, $0xf0
+DATA mask2b<>+5(SB)/1, $0x03
+DATA mask2b<>+6(SB)/1, $0x3f
+DATA mask2b<>+7(SB)/1, $0x00
+DATA mask2b<>+8(SB)/1, $0xf0
+DATA mask2b<>+9(SB)/1, $0x03
+DATA mask2b<>+10(SB)/1, $0x3f
+DATA mask2b<>+11(SB)/1, $0x00
+DATA mask2b<>+12(SB)/1, $0xf0
+DATA mask2b<>+13(SB)/1, $0x03
+DATA mask2b<>+14(SB)/1, $0x3f
+DATA mask2b<>+15(SB)/1, $0x00
+DATA mask2b<>+16(SB)/1, $0xf0
+DATA mask2b<>+17(SB)/1, $0x03
+DATA mask2b<>+18(SB)/1, $0x3f
+DATA mask2b<>+19(SB)/1, $0x00
+DATA mask2b<>+20(SB)/1, $0xf0
+DATA mask2b<>+21(SB)/1, $0x03
+DATA mask2b<>+22(SB)/1, $0x3f
+DATA mask2b<>+23(SB)/1, $0x00
+DATA mask2b<>+24(SB)/1, $0xf0
+DATA mask2b<>+25(SB)/1, $0x03
+DATA mask2b<>+26(SB)/1, $0x3f
+DATA mask2b<>+27(SB)/1, $0x00
+DATA mask2b<>+28(SB)/1, $0xf0
+DATA mask2b<>+29(SB)/1, $0x03
+DATA mask2b<>+30(SB)/1, $0x3f
+DATA mask2b<>+31(SB)/1, $0x00
+GLOBL mask2b<>(SB), RODATA|NOPTR, $32
+
+DATA mullob<>+0(SB)/1, $0x10
+DATA mullob<>+1(SB)/1, $0x00
+DATA mullob<>+2(SB)/1, $0x00
+DATA mullob<>+3(SB)/1, $0x01
+DATA mullob<>+4(SB)/1, $0x10
+DATA mullob<>+5(SB)/1, $0x00
+DATA mullob<>+6(SB)/1, $0x00
+DATA mullob<>+7(SB)/1, $0x01
+DATA mullob<>+8(SB)/1, $0x10
+DATA mullob<>+9(SB)/1, $0x00
+DATA mullob<>+10(SB)/1, $0x00
+DATA mullob<>+11(SB)/1, $0x01
+DATA mullob<>+12(SB)/1, $0x10
+DATA mullob<>+13(SB)/1, $0x00
+DATA mullob<>+14(SB)/1, $0x00
+DATA mullob<>+15(SB)/1, $0x01
+DATA mullob<>+16(SB)/1, $0x10
+DATA mullob<>+17(SB)/1, $0x00
+DATA mullob<>+18(SB)/1, $0x00
+DATA mullob<>+19(SB)/1, $0x01
+DATA mullob<>+20(SB)/1, $0x10
+DATA mullob<>+21(SB)/1, $0x00
+DATA mullob<>+22(SB)/1, $0x00
+DATA mullob<>+23(SB)/1, $0x01
+DATA mullob<>+24(SB)/1, $0x10
+DATA mullob<>+25(SB)/1, $0x00
+DATA mullob<>+26(SB)/1, $0x00
+DATA mullob<>+27(SB)/1, $0x01
+DATA mullob<>+28(SB)/1, $0x10
+DATA mullob<>+29(SB)/1, $0x00
+DATA mullob<>+30(SB)/1, $0x00
+DATA mullob<>+31(SB)/1, $0x01
+GLOBL mullob<>(SB), RODATA|NOPTR, $32
+
+DATA c51b<>+0(SB)/1, $0x33
+DATA c51b<>+1(SB)/1, $0x33
+DATA c51b<>+2(SB)/1, $0x33
+DATA c51b<>+3(SB)/1, $0x33
+DATA c51b<>+4(SB)/1, $0x33
+DATA c51b<>+5(SB)/1, $0x33
+DATA c51b<>+6(SB)/1, $0x33
+DATA c51b<>+7(SB)/1, $0x33
+DATA c51b<>+8(SB)/1, $0x33
+DATA c51b<>+9(SB)/1, $0x33
+DATA c51b<>+10(SB)/1, $0x33
+DATA c51b<>+11(SB)/1, $0x33
+DATA c51b<>+12(SB)/1, $0x33
+DATA c51b<>+13(SB)/1, $0x33
+DATA c51b<>+14(SB)/1, $0x33
+DATA c51b<>+15(SB)/1, $0x33
+DATA c51b<>+16(SB)/1, $0x33
+DATA c51b<>+17(SB)/1, $0x33
+DATA c51b<>+18(SB)/1, $0x33
+DATA c51b<>+19(SB)/1, $0x33
+DATA c51b<>+20(SB)/1, $0x33
+DATA c51b<>+21(SB)/1, $0x33
+DATA c51b<>+22(SB)/1, $0x33
+DATA c51b<>+23(SB)/1, $0x33
+DATA c51b<>+24(SB)/1, $0x33
+DATA c51b<>+25(SB)/1, $0x33
+DATA c51b<>+26(SB)/1, $0x33
+DATA c51b<>+27(SB)/1, $0x33
+DATA c51b<>+28(SB)/1, $0x33
+DATA c51b<>+29(SB)/1, $0x33
+DATA c51b<>+30(SB)/1, $0x33
+DATA c51b<>+31(SB)/1, $0x33
+GLOBL c51b<>(SB), RODATA|NOPTR, $32
+
+DATA c25b<>+0(SB)/1, $0x19
+DATA c25b<>+1(SB)/1, $0x19
+DATA c25b<>+2(SB)/1, $0x19
+DATA c25b<>+3(SB)/1, $0x19
+DATA c25b<>+4(SB)/1, $0x19
+DATA c25b<>+5(SB)/1, $0x19
+DATA c25b<>+6(SB)/1, $0x19
+DATA c25b<>+7(SB)/1, $0x19
+DATA c25b<>+8(SB)/1, $0x19
+DATA c25b<>+9(SB)/1, $0x19
+DATA c25b<>+10(SB)/1, $0x19
+DATA c25b<>+11(SB)/1, $0x19
+DATA c25b<>+12(SB)/1, $0x19
+DATA c25b<>+13(SB)/1, $0x19
+DATA c25b<>+14(SB)/1, $0x19
+DATA c25b<>+15(SB)/1, $0x19
+DATA c25b<>+16(SB)/1, $0x19
+DATA c25b<>+17(SB)/1, $0x19
+DATA c25b<>+18(SB)/1, $0x19
+DATA c25b<>+19(SB)/1, $0x19
+DATA c25b<>+20(SB)/1, $0x19
+DATA c25b<>+21(SB)/1, $0x19
+DATA c25b<>+22(SB)/1, $0x19
+DATA c25b<>+23(SB)/1, $0x19
+DATA c25b<>+24(SB)/1, $0x19
+DATA c25b<>+25(SB)/1, $0x19
+DATA c25b<>+26(SB)/1, $0x19
+DATA c25b<>+27(SB)/1, $0x19
+DATA c25b<>+28(SB)/1, $0x19
+DATA c25b<>+29(SB)/1, $0x19
+DATA c25b<>+30(SB)/1, $0x19
+DATA c25b<>+31(SB)/1, $0x19
+GLOBL c25b<>(SB), RODATA|NOPTR, $32
+
+DATA lutb<>+0(SB)/1, $0x41
+DATA lutb<>+1(SB)/1, $0x47
+DATA lutb<>+2(SB)/1, $0xfc
+DATA lutb<>+3(SB)/1, $0xfc
+DATA lutb<>+4(SB)/1, $0xfc
+DATA lutb<>+5(SB)/1, $0xfc
+DATA lutb<>+6(SB)/1, $0xfc
+DATA lutb<>+7(SB)/1, $0xfc
+DATA lutb<>+8(SB)/1, $0xfc
+DATA lutb<>+9(SB)/1, $0xfc
+DATA lutb<>+10(SB)/1, $0xfc
+DATA lutb<>+11(SB)/1, $0xfc
+DATA lutb<>+12(SB)/1, $0xed
+DATA lutb<>+13(SB)/1, $0xf0
+DATA lutb<>+14(SB)/1, $0x00
+DATA lutb<>+15(SB)/1, $0x00
+DATA lutb<>+16(SB)/1, $0x41
+DATA lutb<>+17(SB)/1, $0x47
+DATA lutb<>+18(SB)/1, $0xfc
+DATA lutb<>+19(SB)/1, $0xfc
+DATA lutb<>+20(SB)/1, $0xfc
+DATA lutb<>+21(SB)/1, $0xfc
+DATA lutb<>+22(SB)/1, $0xfc
+DATA lutb<>+23(SB)/1, $0xfc
+DATA lutb<>+24(SB)/1, $0xfc
+DATA lutb<>+25(SB)/1, $0xfc
+DATA lutb<>+26(SB)/1, $0xfc
+DATA lutb<>+27(SB)/1, $0xfc
+DATA lutb<>+28(SB)/1, $0xed
+DATA lutb<>+29(SB)/1, $0xf0
+DATA lutb<>+30(SB)/1, $0x00
+DATA lutb<>+31(SB)/1, $0x00
+GLOBL lutb<>(SB), RODATA|NOPTR, $32
 
