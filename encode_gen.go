@@ -109,21 +109,39 @@ func main() {
 		Raw("VMOVDQU %s+0(SB), Y13", c51b).
 		Raw("VMOVDQU %s+0(SB), Y14", c25b).
 		Raw("VMOVDQU %s+0(SB), Y15", lutb).
+		// 2x-unrolled: two independent 24->32 blocks (A in Y0-Y2, B in Y3-Y5) are
+		// interleaved per iteration so the CPU overlaps the long per-block chains.
+		Label("vpair").
+		Raw("CMPQ CX, $2").Raw("JLT vsingle").
+		Raw("VMOVDQU (SI), Y0").Raw("VMOVDQU 24(SI), Y3").
+		Raw("VPERMD Y0, Y7, Y0").Raw("VPERMD Y3, Y7, Y3").
+		Raw("VPSHUFB Y8, Y0, Y0").Raw("VPSHUFB Y8, Y3, Y3").
+		Raw("VPAND Y9, Y0, Y1").Raw("VPMULHUW Y10, Y1, Y1").
+		Raw("VPAND Y9, Y3, Y4").Raw("VPMULHUW Y10, Y4, Y4").
+		Raw("VPAND Y11, Y0, Y2").Raw("VPMULLW Y12, Y2, Y2").
+		Raw("VPAND Y11, Y3, Y5").Raw("VPMULLW Y12, Y5, Y5").
+		Raw("VPOR Y2, Y1, Y1").Raw("VPOR Y5, Y4, Y4"). // idxA, idxB
+		Raw("VPSUBUSB Y13, Y1, Y0").Raw("VPSUBUSB Y13, Y4, Y3").
+		Raw("VPCMPGTB Y14, Y1, Y2").Raw("VPCMPGTB Y14, Y4, Y5").
+		Raw("VPSUBB Y2, Y0, Y0").Raw("VPSUBB Y5, Y3, Y3"). // bucketA, bucketB
+		Raw("VPSHUFB Y0, Y15, Y0").Raw("VPSHUFB Y3, Y15, Y3").
+		Raw("VPADDB Y1, Y0, Y1").Raw("VPADDB Y4, Y3, Y4"). // asciiA, asciiB
+		Raw("VMOVDQU Y1, (DI)").Raw("VMOVDQU Y4, 32(DI)").
+		Raw("ADDQ $48, SI").Raw("ADDQ $64, DI").Raw("SUBQ $2, CX").Raw("JMP vpair").
+		Label("vsingle").
 		Raw("TESTQ CX, CX").Raw("JZ vdone").
-		Label("vloop").
 		Raw("VMOVDQU (SI), Y0").
-		Raw("VPERMD Y0, Y7, Y0").  // cross-lane: lane0=bytes0-15, lane1=bytes12-27
-		Raw("VPSHUFB Y8, Y0, Y0"). // per-lane spread
+		Raw("VPERMD Y0, Y7, Y0").
+		Raw("VPSHUFB Y8, Y0, Y0").
 		Raw("VPAND Y9, Y0, Y1").Raw("VPMULHUW Y10, Y1, Y1").
 		Raw("VPAND Y11, Y0, Y2").Raw("VPMULLW Y12, Y2, Y2").
-		Raw("VPOR Y2, Y1, Y1").      // indices
-		Raw("VPSUBUSB Y13, Y1, Y3"). // subs(idx,51)
-		Raw("VPCMPGTB Y14, Y1, Y4"). // idx>25
-		Raw("VPSUBB Y4, Y3, Y3").    // bucket
-		Raw("VPSHUFB Y3, Y15, Y5").  // offsets = lut[bucket]
-		Raw("VPADDB Y1, Y5, Y5").    // ascii
+		Raw("VPOR Y2, Y1, Y1").
+		Raw("VPSUBUSB Y13, Y1, Y3").
+		Raw("VPCMPGTB Y14, Y1, Y4").
+		Raw("VPSUBB Y4, Y3, Y3").
+		Raw("VPSHUFB Y3, Y15, Y5").
+		Raw("VPADDB Y1, Y5, Y5").
 		Raw("VMOVDQU Y5, (DI)").
-		Raw("ADDQ $24, SI").Raw("ADDQ $32, DI").Raw("DECQ CX").Raw("JNZ vloop").
 		Label("vdone").Raw("VZEROUPPER").Ret()
 	f.Add(vv.Func())
 
