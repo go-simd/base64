@@ -1,0 +1,19 @@
+name: bench
+# Native amd64 throughput on ubuntu-latest. The dev machine is arm64, so the
+# amd64 SSE kernel only runs under Rosetta locally (unrepresentative); this job
+# produces representative native numbers for the README Performance table.
+on:
+  push:
+    branches: [main, bench]
+  workflow_dispatch:
+jobs:
+  bench:
+    runs-on: ubuntu-latest # native amd64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: stable }
+      - name: go env
+        run: go env GOARCH GOAMD64
+      - name: benchmark encode
+        run: go test -run '^$' -bench 'Encode' -benchmem -count=6 ./...
