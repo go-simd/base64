@@ -88,8 +88,16 @@ func main() {
 		Label("sdone").Ret()
 	f.Add(s.Func())
 
-	// ---- AVX2: 24 -> 32, 2x-unrolled, VPERMD-free ----
-	shuf2 := f.Data("shuf2", rep(shufBytes, 2))
+	// ---- AVX2: 24 -> 32, 2x-unrolled, VINSERTI128-free steady state ----
+	shuf2 := f.Data("shuf2", rep(shufBytes, 2)) // block-0 mask (VINSERTI128 layout)
+	// shuf4: spread mask for the -4-offset load. A VMOVDQU at src-4 already places
+	// lane1=bytes12-27 (no VINSERTI128); lane0=bytes(-4..11), so lane0's shuffle is
+	// the standard mask shifted by +4, lane1's is the standard mask.
+	shuf4lane0 := make([]byte, 16)
+	for i := range shufBytes {
+		shuf4lane0[i] = shufBytes[i] + 4
+	}
+	shuf4 := f.Data("shuf4", append(append([]byte{}, shuf4lane0...), shufBytes...))
 	m1b := f.Data("mask1b", rep(mask1Bytes, 8))
 	mhb := f.Data("mulhib", rep(mulhiBytes, 8))
 	m2b := f.Data("mask2b", rep(mask2Bytes, 8))
@@ -98,12 +106,13 @@ func main() {
 	c25b := f.Data("c25b", repByte(25, 32))
 	lutb := f.Data("lutb", rep(lutBytes, 2))
 
-	// VMOVDQU + VINSERTI128 place lane0=bytes0-15, lane1=bytes12-27 without VPERMD.
-	// Dropping perm frees a register, so all eight constants stay in YMM (Y8-Y15);
-	// two independent blocks (A=Y0-2, B=Y3-5) interleave per iteration for ILP.
+	// Steady state loads 32 bytes at src-4 and spreads with one VPSHUFB (shuf4) —
+	// no VINSERTI128, relieving the shuffle port (the bottleneck). Only block 0 must
+	// use VINSERTI128+shuf2 (a -4 load there would read before src). Y8=shuf4;
+	// Y9-Y15 = mask1/mulhi/mask2/mullo/c51/c25/lut; A=Y0-2, B=Y3-5 interleave for ILP.
 	vv := amd64.NewFunc("encodeBlocksAVX2", sig(), 0)
 	vv.LoadArg("dst_base", "DI").LoadArg("src_base", "SI").LoadArg("n", "CX").
-		Raw("VMOVDQU %s+0(SB), Y8", shuf2).
+		Raw("VMOVDQU %s+0(SB), Y8", shuf4).
 		Raw("VMOVDQU %s+0(SB), Y9", m1b).
 		Raw("VMOVDQU %s+0(SB), Y10", mhb).
 		Raw("VMOVDQU %s+0(SB), Y11", m2b).
@@ -111,27 +120,40 @@ func main() {
 		Raw("VMOVDQU %s+0(SB), Y13", c51b).
 		Raw("VMOVDQU %s+0(SB), Y14", c25b).
 		Raw("VMOVDQU %s+0(SB), Y15", lutb).
+		Raw("TESTQ CX, CX").Raw("JZ vdone").
+		// block 0: VINSERTI128 + shuf2 (the only block that can't do the -4 load).
+		Raw("VMOVDQU (SI), Y0").Raw("VINSERTI128 $1, 12(SI), Y0, Y0").
+		Raw("VPSHUFB %s+0(SB), Y0, Y0", shuf2).
+		Raw("VPAND Y9, Y0, Y1").Raw("VPMULHUW Y10, Y1, Y1").
+		Raw("VPAND Y11, Y0, Y2").Raw("VPMULLW Y12, Y2, Y2").
+		Raw("VPOR Y2, Y1, Y1").
+		Raw("VPSUBUSB Y13, Y1, Y3").
+		Raw("VPCMPGTB Y14, Y1, Y4").
+		Raw("VPSUBB Y4, Y3, Y3").
+		Raw("VPSHUFB Y3, Y15, Y5").
+		Raw("VPADDB Y1, Y5, Y5").
+		Raw("VMOVDQU Y5, (DI)").
+		Raw("ADDQ $24, SI").Raw("ADDQ $32, DI").Raw("DECQ CX").
+		// remaining blocks: -4-offset load + shuf4, no VINSERTI128, 2x-unrolled.
 		Label("vpair").
 		Raw("CMPQ CX, $2").Raw("JLT vsingle").
-		Raw("VMOVDQU (SI), Y0").Raw("VINSERTI128 $1, 12(SI), Y0, Y0").
-		Raw("VMOVDQU 24(SI), Y3").Raw("VINSERTI128 $1, 36(SI), Y3, Y3").
+		Raw("VMOVDQU -4(SI), Y0").Raw("VMOVDQU 20(SI), Y3").
 		Raw("VPSHUFB Y8, Y0, Y0").Raw("VPSHUFB Y8, Y3, Y3").
 		Raw("VPAND Y9, Y0, Y1").Raw("VPMULHUW Y10, Y1, Y1").
 		Raw("VPAND Y9, Y3, Y4").Raw("VPMULHUW Y10, Y4, Y4").
 		Raw("VPAND Y11, Y0, Y2").Raw("VPMULLW Y12, Y2, Y2").
 		Raw("VPAND Y11, Y3, Y5").Raw("VPMULLW Y12, Y5, Y5").
-		Raw("VPOR Y2, Y1, Y1").Raw("VPOR Y5, Y4, Y4"). // idxA, idxB
+		Raw("VPOR Y2, Y1, Y1").Raw("VPOR Y5, Y4, Y4").
 		Raw("VPSUBUSB Y13, Y1, Y0").Raw("VPSUBUSB Y13, Y4, Y3").
 		Raw("VPCMPGTB Y14, Y1, Y2").Raw("VPCMPGTB Y14, Y4, Y5").
-		Raw("VPSUBB Y2, Y0, Y0").Raw("VPSUBB Y5, Y3, Y3"). // bucketA, bucketB
+		Raw("VPSUBB Y2, Y0, Y0").Raw("VPSUBB Y5, Y3, Y3").
 		Raw("VPSHUFB Y0, Y15, Y0").Raw("VPSHUFB Y3, Y15, Y3").
-		Raw("VPADDB Y1, Y0, Y1").Raw("VPADDB Y4, Y3, Y4"). // asciiA, asciiB
+		Raw("VPADDB Y1, Y0, Y1").Raw("VPADDB Y4, Y3, Y4").
 		Raw("VMOVDQU Y1, (DI)").Raw("VMOVDQU Y4, 32(DI)").
 		Raw("ADDQ $48, SI").Raw("ADDQ $64, DI").Raw("SUBQ $2, CX").Raw("JMP vpair").
 		Label("vsingle").
 		Raw("TESTQ CX, CX").Raw("JZ vdone").
-		Raw("VMOVDQU (SI), Y0").Raw("VINSERTI128 $1, 12(SI), Y0, Y0").
-		Raw("VPSHUFB Y8, Y0, Y0").
+		Raw("VMOVDQU -4(SI), Y0").Raw("VPSHUFB Y8, Y0, Y0").
 		Raw("VPAND Y9, Y0, Y1").Raw("VPMULHUW Y10, Y1, Y1").
 		Raw("VPAND Y11, Y0, Y2").Raw("VPMULLW Y12, Y2, Y2").
 		Raw("VPOR Y2, Y1, Y1").

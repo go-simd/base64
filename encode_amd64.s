@@ -48,7 +48,7 @@ TEXT ·encodeBlocksAVX2(SB), NOSPLIT, $0-56
 	MOVQ dst_base+0(FP), DI
 	MOVQ src_base+24(FP), SI
 	MOVQ n+48(FP), CX
-	VMOVDQU shuf2<>+0(SB), Y8
+	VMOVDQU shuf4<>+0(SB), Y8
 	VMOVDQU mask1b<>+0(SB), Y9
 	VMOVDQU mulhib<>+0(SB), Y10
 	VMOVDQU mask2b<>+0(SB), Y11
@@ -56,13 +56,30 @@ TEXT ·encodeBlocksAVX2(SB), NOSPLIT, $0-56
 	VMOVDQU c51b<>+0(SB), Y13
 	VMOVDQU c25b<>+0(SB), Y14
 	VMOVDQU lutb<>+0(SB), Y15
+	TESTQ CX, CX
+	JZ vdone
+	VMOVDQU (SI), Y0
+	VINSERTI128 $1, 12(SI), Y0, Y0
+	VPSHUFB shuf2<>+0(SB), Y0, Y0
+	VPAND Y9, Y0, Y1
+	VPMULHUW Y10, Y1, Y1
+	VPAND Y11, Y0, Y2
+	VPMULLW Y12, Y2, Y2
+	VPOR Y2, Y1, Y1
+	VPSUBUSB Y13, Y1, Y3
+	VPCMPGTB Y14, Y1, Y4
+	VPSUBB Y4, Y3, Y3
+	VPSHUFB Y3, Y15, Y5
+	VPADDB Y1, Y5, Y5
+	VMOVDQU Y5, (DI)
+	ADDQ $24, SI
+	ADDQ $32, DI
+	DECQ CX
 vpair:
 	CMPQ CX, $2
 	JLT vsingle
-	VMOVDQU (SI), Y0
-	VINSERTI128 $1, 12(SI), Y0, Y0
-	VMOVDQU 24(SI), Y3
-	VINSERTI128 $1, 36(SI), Y3, Y3
+	VMOVDQU -4(SI), Y0
+	VMOVDQU 20(SI), Y3
 	VPSHUFB Y8, Y0, Y0
 	VPSHUFB Y8, Y3, Y3
 	VPAND Y9, Y0, Y1
@@ -94,8 +111,7 @@ vpair:
 vsingle:
 	TESTQ CX, CX
 	JZ vdone
-	VMOVDQU (SI), Y0
-	VINSERTI128 $1, 12(SI), Y0, Y0
+	VMOVDQU -4(SI), Y0
 	VPSHUFB Y8, Y0, Y0
 	VPAND Y9, Y0, Y1
 	VPMULHUW Y10, Y1, Y1
@@ -289,6 +305,40 @@ DATA shuf2<>+29(SB)/1, $0x09
 DATA shuf2<>+30(SB)/1, $0x0b
 DATA shuf2<>+31(SB)/1, $0x0a
 GLOBL shuf2<>(SB), RODATA|NOPTR, $32
+
+DATA shuf4<>+0(SB)/1, $0x05
+DATA shuf4<>+1(SB)/1, $0x04
+DATA shuf4<>+2(SB)/1, $0x06
+DATA shuf4<>+3(SB)/1, $0x05
+DATA shuf4<>+4(SB)/1, $0x08
+DATA shuf4<>+5(SB)/1, $0x07
+DATA shuf4<>+6(SB)/1, $0x09
+DATA shuf4<>+7(SB)/1, $0x08
+DATA shuf4<>+8(SB)/1, $0x0b
+DATA shuf4<>+9(SB)/1, $0x0a
+DATA shuf4<>+10(SB)/1, $0x0c
+DATA shuf4<>+11(SB)/1, $0x0b
+DATA shuf4<>+12(SB)/1, $0x0e
+DATA shuf4<>+13(SB)/1, $0x0d
+DATA shuf4<>+14(SB)/1, $0x0f
+DATA shuf4<>+15(SB)/1, $0x0e
+DATA shuf4<>+16(SB)/1, $0x01
+DATA shuf4<>+17(SB)/1, $0x00
+DATA shuf4<>+18(SB)/1, $0x02
+DATA shuf4<>+19(SB)/1, $0x01
+DATA shuf4<>+20(SB)/1, $0x04
+DATA shuf4<>+21(SB)/1, $0x03
+DATA shuf4<>+22(SB)/1, $0x05
+DATA shuf4<>+23(SB)/1, $0x04
+DATA shuf4<>+24(SB)/1, $0x07
+DATA shuf4<>+25(SB)/1, $0x06
+DATA shuf4<>+26(SB)/1, $0x08
+DATA shuf4<>+27(SB)/1, $0x07
+DATA shuf4<>+28(SB)/1, $0x0a
+DATA shuf4<>+29(SB)/1, $0x09
+DATA shuf4<>+30(SB)/1, $0x0b
+DATA shuf4<>+31(SB)/1, $0x0a
+GLOBL shuf4<>(SB), RODATA|NOPTR, $32
 
 DATA mask1b<>+0(SB)/1, $0x00
 DATA mask1b<>+1(SB)/1, $0xfc
