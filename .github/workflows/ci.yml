@@ -18,3 +18,31 @@ jobs:
       - run: go vet ./...
       - run: go test -v ./...
       - run: go test -run '^$' -fuzz FuzzEncode -fuzztime 15s ./...
+      - name: coverage gate (100%)
+        run: |
+          go test -covermode=atomic -coverprofile=cov.out ./...
+          pct=$(go tool cover -func=cov.out | awk '/^total:/{print $3}')
+          echo "coverage=$pct"
+          [ "$pct" = "100.0%" ] || { echo "coverage below 100%"; exit 1; }
+
+  # The !amd64 && !arm64 generic fallback (encode_generic.go) only compiles off
+  # those arches; cover it on riscv64 under QEMU so no generic-only statement is
+  # left unmeasured. debian:trixie hosts the qemu-user riscv64 runtime.
+  coverage-riscv64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: actions/setup-go@v5
+        with: { go-version: stable }
+      - run: GOOS=linux GOARCH=riscv64 go test -covermode=atomic -coverpkg=./... -c -o /tmp/cov.test .
+      - name: run under qemu-riscv64 and gate (100%)
+        run: |
+          docker run --rm --platform linux/riscv64 \
+            -e QEMU_CPU=rv64,v=true,vlen=128 \
+            -v /tmp:/t debian:trixie \
+            /t/cov.test -test.coverprofile=/t/cov.out
+          go tool cover -func=/tmp/cov.out
+          pct=$(go tool cover -func=/tmp/cov.out | awk '/^total:/{print $3}')
+          echo "coverage=$pct"
+          [ "$pct" = "100.0%" ] || { echo "coverage below 100%"; exit 1; }

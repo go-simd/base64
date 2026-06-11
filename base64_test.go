@@ -28,6 +28,48 @@ func TestEncode(t *testing.T) {
 	}
 }
 
+func TestDecode(t *testing.T) {
+	rng := rand.New(rand.NewSource(3))
+	for _, n := range []int{0, 1, 2, 3, 11, 12, 13, 15, 16, 17, 24, 47, 48, 49, 1000, 4096} {
+		src := make([]byte, n)
+		rng.Read(src)
+		enc := EncodeToString(src)
+
+		// DecodedLen / DecodeString.
+		if got := DecodedLen(len(enc)); got < n {
+			t.Fatalf("n=%d: DecodedLen=%d < %d", n, got, n)
+		}
+		got, err := DecodeString(enc)
+		if err != nil {
+			t.Fatalf("n=%d: DecodeString: %v", n, err)
+		}
+		if string(got) != string(src) {
+			t.Fatalf("n=%d: DecodeString round-trip mismatch", n)
+		}
+
+		// Decode into a caller-supplied buffer.
+		dst := make([]byte, DecodedLen(len(enc)))
+		nn, err := Decode(dst, []byte(enc))
+		if err != nil {
+			t.Fatalf("n=%d: Decode: %v", n, err)
+		}
+		if string(dst[:nn]) != string(src) {
+			t.Fatalf("n=%d: Decode round-trip mismatch", n)
+		}
+	}
+}
+
+func TestDecodeError(t *testing.T) {
+	// Invalid base64 must surface the stdlib error through both wrappers.
+	if _, err := DecodeString("!!!!"); err == nil {
+		t.Fatal("DecodeString: want error on invalid input, got nil")
+	}
+	dst := make([]byte, 8)
+	if _, err := Decode(dst, []byte("!!!!")); err == nil {
+		t.Fatal("Decode: want error on invalid input, got nil")
+	}
+}
+
 func FuzzEncode(f *testing.F) {
 	f.Add([]byte("hello world"))
 	f.Fuzz(func(t *testing.T, src []byte) {
