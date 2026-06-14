@@ -1,0 +1,29 @@
+//go:build s390x
+
+package base64
+
+// decodeBlocks decodes up to n groups of 16 base64 chars into 12 bytes each via
+// the z/Architecture vector facility (Lemire/Muła vectorised decode). It returns
+// the number of groups fully decoded before running out of groups or hitting a
+// block that contains an invalid base64 byte (whitespace, padding '=', or any
+// non-alphabet char); the caller decodes the remainder with the stdlib. Generated
+// by go-asmgen (decode_s390x_gen.go), in decode_s390x.s.
+func decodeBlocks(dst, src []byte, n int) int
+
+// decodeSIMD decodes the clean leading blocks of src and reports bytes
+// consumed/written so the caller finishes the tail (the padded final quantum, or
+// the first block with an invalid byte) with the stdlib. The kernel reads 16
+// bytes and stores 16 per 12-byte group while advancing dst by 12, so it
+// over-writes 4 bytes past each group; we reserve an 8-byte trailing source span
+// (where StdEncoding padding also lives) so the final group's over-store stays in
+// the room the scalar tail decode needs.
+func decodeSIMD(dst, src []byte) (srcDone, dstDone int) {
+	n := len(src)
+	if n < 16+8 {
+		return 0, 0
+	}
+	usable := n - 8
+	groups := usable / 16
+	got := decodeBlocks(dst, src, groups)
+	return got * 16, got * 12
+}

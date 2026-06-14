@@ -18,6 +18,7 @@ jobs:
       - run: go vet ./...
       - run: go test -v ./...
       - run: go test -run '^$' -fuzz FuzzEncode -fuzztime 15s ./...
+      - run: go test -run '^$' -fuzz FuzzDecode -fuzztime 15s ./...
       - name: coverage gate (100%)
         run: |
           go test -covermode=atomic -coverprofile=cov.out ./...
@@ -26,11 +27,11 @@ jobs:
           [ "$pct" = "100.0%" ] || { echo "coverage below 100%"; exit 1; }
 
   # Emulated arches under QEMU. ppc64le (VSX) and s390x (vector facility) each
-  # have a real SIMD encode kernel; riscv64 exercises the !amd64 && !arm64 &&
-  # !ppc64le && !s390x generic fallback (encode_generic.go) so no generic-only
-  # statement is left unmeasured. qemu cpu models copied from go-simd/matchlen's
-  # green job (power9 for ppc64le, the default "qemu" for s390x — NOT z14, which
-  # is fatal under TCG).
+  # have a real SIMD encode AND decode kernel; riscv64 exercises the !amd64 &&
+  # !arm64 && !ppc64le && !s390x generic fallback (encode_generic.go +
+  # decode_generic.go) so no generic-only statement is left unmeasured. qemu cpu
+  # models copied from go-simd/matchlen's green job (power9 for ppc64le, the
+  # default "qemu" for s390x — NOT z14, which is fatal under TCG).
   emulated:
     runs-on: ubuntu-latest
     strategy:
@@ -58,9 +59,9 @@ jobs:
           echo "coverage=$pct"
           [ "$pct" = "100.0%" ] || { echo "coverage below 100%"; exit 1; }
 
-  # Fuzz the ppc64le and s390x SIMD kernels under QEMU (byte-identical to
-  # encoding/base64). Needs the in-container Go toolchain since -fuzz cannot run
-  # from a prebuilt test binary.
+  # Fuzz the ppc64le and s390x SIMD kernels under QEMU (encode byte-identical and
+  # decode byte- AND error-identical to encoding/base64). Needs the in-container Go
+  # toolchain since -fuzz cannot run from a prebuilt test binary.
   fuzz-emulated:
     runs-on: ubuntu-latest
     strategy:
@@ -78,4 +79,5 @@ jobs:
             -e QEMU_CPU=${{ matrix.qemu }} -e GOFLAGS=-mod=mod \
             -v "$PWD":/src -w /src golang:1-trixie \
             sh -c 'go test -run "TestEncode|TestDecode" ./... &&
-                   go test -run "^$" -fuzz FuzzEncode -fuzztime 20s ./...'
+                   go test -run "^$" -fuzz FuzzEncode -fuzztime 20s ./... &&
+                   go test -run "^$" -fuzz FuzzDecode -fuzztime 20s ./...'
