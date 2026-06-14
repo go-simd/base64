@@ -15,6 +15,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/go-asmgen/asmgen/abi"
 	"github.com/go-asmgen/asmgen/arm64"
@@ -123,7 +124,11 @@ func main() {
 		Label("done").
 		Ret()
 	f.Add(b.Func())
-	if err := os.WriteFile("encode_arm64.s", []byte(f.String()), 0o644); err != nil {
+	// This shift-based kernel is the stable-Go path; the go1.27 build uses the
+	// VUMULL multiply kernel instead (encode_arm64_go127.s), so this .s is gated
+	// off there to avoid a duplicate ·encodeBlocks symbol.
+	out := strings.Replace(f.String(), "//go:build arm64\n", "//go:build arm64 && !go1.27\n", 1)
+	if err := os.WriteFile("encode_arm64.s", []byte(out), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
