@@ -60,9 +60,10 @@ Encode throughput, 1 MiB buffer, **native amd64** (GitHub Actions, AMD EPYC 7763
 | [`emmansun/base64`](https://github.com/emmansun/base64) | pure-Go SIMD (AVX2) | ~19300 | ~16× |
 | **this package** | pure-Go SIMD (AVX2) | **~20500** | **~17×** |
 
-**This package leads `emmansun/base64` by ~5–6%** (confirmed across CI reruns) —
-notable, since emmansun is the mature reference. The edge came from a
-**cycle-model-guided** optimization: `llvm-mca` showed the kernel was shuffle-port
+**On amd64 this package leads `emmansun/base64`** (~5–6% on native CI; the
+re-bench confirms the direction) — notable, since emmansun is the mature
+reference. The edge came from a **cycle-model-guided** optimization: `llvm-mca`
+showed the kernel was shuffle-port
 (`Zn3FP1`) bound; disassembling emmansun revealed a **`-4`-offset 32-byte load**
 that spreads with a single `VPSHUFB` (no cross-lane `VINSERTI128`); combining that
 load with this package's 2×-unroll was *predicted* at 2.15 cyc/block (vs emmansun's
@@ -70,10 +71,47 @@ load with this package's 2×-unroll was *predicted* at 2.15 cyc/block (vs emmans
 there would read before `src`.) See
 [go-asmgen `toolkit/mca`](https://github.com/go-asmgen/asmgen/tree/main/asmgen/toolkit/mca).
 
+### Re-bench ratios (as of 2026-06-14, `-count=6` medians, kernels unchanged)
+
+| arch | host | ours vs stdlib | ours vs emmansun |
+|---|---|---:|---:|
+| amd64 | x86_64 QEMU VM (ratio valid, absolute MB/s low) | **~3.6×** | **~1.31× (ours wins)** |
+| arm64 | Apple Silicon (native) | **~2.3×** | **~0.30× (emmansun wins ~3.4×)** |
+
+**Verdict update — honest:** the "leads emmansun" claim holds **only on amd64**.
+On **arm64, emmansun is ~3.4× faster than this package**: emmansun ships a
+hand-tuned NEON encode while this package's arm64 path is the shift-based
+go-asmgen kernel and is only ~2.3× stdlib. So the amd64 win does **not** transfer
+to arm64; the NEON kernel is the place to improve next.
+
 - **arm64**: a NEON encode (shift-based, since arm64 has no integer vector
-  multiply) — ~2.3× stdlib.
+  multiply) — ~2.3× stdlib, but behind emmansun's hand-tuned NEON (see above).
 - **ppc64le / s390x**: qemu-validated SIMD encode kernels (table + fuzz, byte-
-  identical to `encoding/base64`); native throughput numbers pending hardware.
+  identical to `encoding/base64`); native throughput numbers pending hardware —
+  see the llvm-mca cycle-model estimate below.
+
+### ppc64le / s390x — llvm-mca cycle-model estimate
+
+> **Static analysis, NOT a hardware measurement; native perf pending real
+> silicon.** No GitHub-hosted POWER/IBM Z runner exists and qemu's TCG is not
+> cycle-accurate, so the cycle model is the only defensible signal. Numbers from
+> `llvm-mca` (LLVM 22) fed the straight-line encode inner loop translated to LLVM
+> asm syntax; the encode loop has no data-dependent branch, so the steady-state
+> model is the whole story. The scalar baseline is a representative
+> 3-input-byte/iter table-lookup loop modeled the same way.
+
+| arch | cpu model | SIMD cyc/iter | SIMD input-B/cyc | scalar input-B/cyc | est. speedup |
+|---|---|---:|---:|---:|---:|
+| ppc64le | pwr9 | 10.3 (12 B in) | ~1.17 | ~0.60 (3 B / 5.0 cyc) | **~1.95×** |
+| s390x | z14 | 9.5 (12 B in) | ~1.26 | ~0.43 (3 B / 7.0 cyc) | **~2.9×** |
+
+The VSX/vector encode kernels are estimated **~2–3× their scalar baseline** on
+the cycle model. Caveats: llvm-mca idealizes the frontend (perfect dispatch, no
+branch misprediction, no cache/store-buffer stalls), so these are compute upper
+bounds; the scalar baseline's gather-style table loads (`LBZX`/`LLC` from a
+64-entry LUT) are assumed L1-resident — real silicon may add load-port pressure
+that *widens* the SIMD advantage. All instructions in both loops were accepted
+and modeled by llvm-mca (no fallbacks).
 - **decode** is scalar (`encoding/base64`) for now; a SIMD decode is planned.
 - cgo wrappers of [aklomp/base64](https://github.com/aklomp/base64) are faster
   still but need a C toolchain — excluded from this pure-Go comparison.
