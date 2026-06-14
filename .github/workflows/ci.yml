@@ -25,24 +25,57 @@ jobs:
           echo "coverage=$pct"
           [ "$pct" = "100.0%" ] || { echo "coverage below 100%"; exit 1; }
 
-  # The !amd64 && !arm64 generic fallback (encode_generic.go) only compiles off
-  # those arches; cover it on riscv64 under QEMU so no generic-only statement is
-  # left unmeasured. debian:trixie hosts the qemu-user riscv64 runtime.
-  coverage-riscv64:
+  # Emulated arches under QEMU. ppc64le (VSX) and s390x (vector facility) each
+  # have a real SIMD encode kernel; riscv64 exercises the !amd64 && !arm64 &&
+  # !ppc64le && !s390x generic fallback (encode_generic.go) so no generic-only
+  # statement is left unmeasured. qemu cpu models copied from go-simd/matchlen's
+  # green job (power9 for ppc64le, the default "qemu" for s390x — NOT z14, which
+  # is fatal under TCG).
+  emulated:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: riscv64, image: "debian:trixie", qemu: "rv64,v=true,vlen=128" }
+          - { arch: ppc64le, image: "debian:trixie", qemu: "power9" }
+          - { arch: s390x,   image: "debian:trixie", qemu: "qemu" }
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
       - uses: actions/setup-go@v5
         with: { go-version: stable }
-      - run: GOOS=linux GOARCH=riscv64 go test -covermode=atomic -coverpkg=./... -c -o /tmp/cov.test .
-      - name: run under qemu-riscv64 and gate (100%)
+      - run: docker run --privileged --rm tonistiigi/binfmt --install ${{ matrix.arch }}
+      - name: build cover test binary
+        run: GOOS=linux GOARCH=${{ matrix.arch }} go test -covermode=atomic -coverpkg=./... -c -o /tmp/cov.test .
+      - name: run under qemu and gate (100%)
         run: |
-          docker run --rm --platform linux/riscv64 \
-            -e QEMU_CPU=rv64,v=true,vlen=128 \
-            -v /tmp:/t debian:trixie \
-            /t/cov.test -test.coverprofile=/t/cov.out
+          docker run --rm --platform linux/${{ matrix.arch }} \
+            -e QEMU_CPU=${{ matrix.qemu }} \
+            -v /tmp:/t ${{ matrix.image }} \
+            /t/cov.test -test.v -test.coverprofile=/t/cov.out
           go tool cover -func=/tmp/cov.out
           pct=$(go tool cover -func=/tmp/cov.out | awk '/^total:/{print $3}')
           echo "coverage=$pct"
           [ "$pct" = "100.0%" ] || { echo "coverage below 100%"; exit 1; }
+
+  # Fuzz the ppc64le and s390x SIMD kernels under QEMU (byte-identical to
+  # encoding/base64). Needs the in-container Go toolchain since -fuzz cannot run
+  # from a prebuilt test binary.
+  fuzz-emulated:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: ppc64le, qemu: "power9" }
+          - { arch: s390x,   qemu: "qemu" }
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker run --privileged --rm tonistiigi/binfmt --install ${{ matrix.arch }}
+      - name: fuzz under qemu
+        run: |
+          docker run --rm --platform linux/${{ matrix.arch }} \
+            -e QEMU_CPU=${{ matrix.qemu }} -e GOFLAGS=-mod=mod \
+            -v "$PWD":/src -w /src golang:1-trixie \
+            sh -c 'go test -run "TestEncode|TestDecode" ./... &&
+                   go test -run "^$" -fuzz FuzzEncode -fuzztime 20s ./...'
