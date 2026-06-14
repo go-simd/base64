@@ -18,7 +18,7 @@ b, err := base64.DecodeString(s)      // same bytes + same error/offset as stdli
 
 | op | amd64 | arm64 | ppc64le | s390x | loong64 / riscv64 |
 |---|---|---|---|---|---|
-| encode | **AVX2 + SSE2** (Lemire) | **NEON** (shift-based; **VUMULL multiply on go1.27+**) | **VSX** (shift-based) | **vector facility** (shift-based) | scalar (stdlib) |
+| encode | **AVX2 + SSE2** (Lemire) | **NEON** (`VLD3`/`VST4` deinterleaving I/O) | **VSX** (shift-based) | **vector facility** (shift-based) | scalar (stdlib) |
 | decode | **AVX2 + SSE** (Muła) | **NEON** (shift-based) | **VSX** (shift-based) | **vector facility** (shift-based) | scalar (stdlib) |
 
 The encoder is Lemire's vectorised base64: a shuffle spreads the input across
@@ -26,15 +26,22 @@ The encoder is Lemire's vectorised base64: a shuffle spreads the input across
 offset-LUT maps each to its ASCII byte (constants via go-asmgen's
 `emit.File.Data`). On amd64 the index extraction uses the two-multiply
 (`PMULHUW`/`PMULLW`) trick; on ppc64le/s390x it uses a right-shift-only
-extraction (per-32-bit-word shifts + masks). On **arm64** there are two encode
-kernels: released Go builds the shift-only kernel (the Go arm64 assembler had no
-integer vector multiply); **Go 1.27+** builds a NEON port of the amd64
-two-multiply trick (`VUMULL`/`VUMULL2` for the high indices, `VMUL` for the low),
-gated `//go:build arm64 && go1.27` — same constants as the SSE path. The multiply
-kernel is ~2.5× the shift kernel but still trails `emmansun/base64` (see
-Performance): emmansun's win comes from its `VLD3`/`VST4` deinterleaving I/O, not
-from a multiply, and that structure outperforms the packed 12-byte multiply form
-on NEON. See the encode benchmark notes below for the measured comparison.
+extraction (per-32-bit-word shifts + masks).
+
+**arm64** uses the aklomp/emmansun **deinterleaving-I/O** design, the structure
+that makes NEON base64 fast — and it needs no integer vector multiply, so it
+builds on **released Go** (no go1.27 gating). Each iteration consumes 48 input
+bytes and emits 64 chars: a `VLD3.P` deinterleaving load splits the input into
+its three byte-planes (lane *i* of each plane is the 1st/2nd/3rd byte of 24-bit
+group *i*), the four 6-bit indices are extracted per byte-plane with plain shifts
+and inserts (`VUSHR`/`VSLI`/`VAND`, no multiply), four `VTBL` lookups map each
+plane's indices through the 64-byte alphabet, and a `VST4.P` interleaving store
+writes the chars back in order. The deinterleave/interleave is free in the
+load/store unit, which is why this **ties `emmansun/base64` at ~22 GB/s** (see
+Performance) versus the ~6.6 GB/s of the previous VTBL-spread + per-lane-shift
+kernel. (An earlier go1.27-only `VUMULL`/`VMUL` multiply port of the amd64 trick
+was dropped: it ran ~16 GB/s — faster than the old shift kernel but slower than
+this VLD3/VST4 path, and it required an unreleased toolchain.)
 
 The decoder is Muła's vectorised base64: two nibble-keyed `PSHUFB`/`TBL`/`VPERM`
 LUTs (`lut_lo`/`lut_hi`) both validate each byte (a char is valid iff
@@ -105,24 +112,22 @@ there would read before `src`.) See
 | arch | host | toolchain | ours vs stdlib | ours vs emmansun |
 |---|---|---|---:|---:|
 | amd64 | x86_64 QEMU VM (ratio valid, absolute MB/s low) | stable | **~3.6×** | **~1.31× (ours wins)** |
-| arm64 | Apple Silicon (native) | stable (shift kernel) | **~2.4×** | ~0.29× (emmansun wins ~3.4×) |
-| arm64 | Apple Silicon (native) | **go1.27 (VUMULL kernel)** | **~6.0×** | ~0.72× (emmansun wins ~1.4×) |
+| arm64 | Apple Silicon (native) | stable (`VLD3`/`VST4` kernel) | **~8.0×** | **~0.98× (tie)** |
 
 **Verdict update — honest:** the "leads emmansun" claim holds **only on amd64**.
-On **arm64** the new go1.27 `VUMULL`/`VMUL` encode kernel is ~16.4 GB/s — a
-**~2.5× jump over the stable shift kernel** (~6.6 GB/s), closing the gap to
-`emmansun/base64` from ~3.4× behind to **~1.4× behind** (emmansun ~22.9 GB/s).
-It does **not** overtake emmansun: emmansun's main loop processes 48 bytes per
-iteration with `VLD3`/`VST4` deinterleaving loads/stores (one `TBL` per output
-stream, no multiply at all), and that I/O structure beats the packed 12-byte
-multiply form on NEON. The multiply trick is decisive on SSE — where there is no
-cheap deinterleaving load — but only ties/loses to `VLD3`/`VST4` here. We ship the
-multiply kernel anyway because it is a clear win over the prior arm64 path; a
-`VLD3`/`VST4` shift kernel (measured to ~tie emmansun) is the next step if needed.
+On **arm64** the new `VLD3.P`/`VST4.P` deinterleaving-I/O encode kernel runs at
+**~22.1 GB/s** vs `emmansun/base64`'s **~22.5 GB/s** (`-count=6` averages on an
+Apple Silicon native host; modal runs of both sit at ~22.4 GB/s) — a **dead heat**,
+ours at ~0.98× emmansun, well inside run-to-run noise. This is a **~3.3× jump over
+the prior stable shift kernel** (~6.6 GB/s) and it builds on **released Go**. The
+deinterleaving load/store is the whole lever: emmansun's speed came from `VLD3`/
+`VST4` + one `TBL` per output stream (no multiply), and once our kernel adopts the
+same structure the two converge. An earlier go1.27-only `VUMULL`/`VMUL` multiply
+port reached ~16 GB/s but was both slower than this path and gated on an
+unreleased toolchain, so it was removed.
 
-- **arm64**: two NEON encode kernels — a shift-only one on released Go (~2.4×
-  stdlib) and a `VUMULL`/`VMUL` multiply one on Go 1.27+ (~6× stdlib, ~0.72×
-  emmansun; see above).
+- **arm64**: NEON `VLD3`/`VST4` deinterleaving-I/O encode kernel on released Go
+  (~8× stdlib, ~tie with emmansun; see above).
 - **ppc64le / s390x**: qemu-validated SIMD encode kernels (table + fuzz, byte-
   identical to `encoding/base64`); native throughput numbers pending hardware —
   see the llvm-mca cycle-model estimate below.
@@ -163,7 +168,9 @@ MB/s is low but the **ratio is valid**; native CI silicon is far faster.
 
 **Honest:** on **amd64** this package's Muła SIMD decode beats both stdlib (~1.4×)
 and emmansun (~1.3×). On **arm64** it is ~1.8× stdlib but behind emmansun's
-hand-tuned NEON decode (same story as encode). **ppc64le / s390x** decode kernels
+hand-tuned NEON decode (the arm64 decode kernel is still shift-only; a `VLD4`/
+`VST3` deinterleaving rewrite — the decode analogue of the encode kernel that now
+ties emmansun — is the next step). **ppc64le / s390x** decode kernels
 are qemu-validated (`FuzzDecode`, byte- and error-identical); native throughput
 pending hardware.
 

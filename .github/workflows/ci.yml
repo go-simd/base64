@@ -3,11 +3,11 @@ on:
   push: { branches: [main] }
   pull_request:
 jobs:
-  # Native amd64 (AVX2 + SSE, dispatch + Force kernels) and native arm64. On
-  # arm64 the stable toolchain has no go1.27 integer-multiply mnemonics, so the
-  # encode kernel built here is the shift-and-mask path (encode_arm64.go, gated
-  # arm64 && !go1.27); the go1.27 VUMULL multiply kernel is covered by the
-  # gotip job below. The gate enforces 100% Go-statement coverage on each.
+  # Native amd64 (AVX2 + SSE, dispatch + Force kernels) and native arm64. The
+  # arm64 encode kernel is the aklomp/emmansun VLD3.P/VST4.P deinterleaving-I/O
+  # NEON path (encode_arm64.go / .s): it uses only released-Go mnemonics, so the
+  # stable toolchain here builds and covers it directly — no go1.27 gating. The
+  # gate enforces 100% Go-statement coverage on each arch.
   test:
     strategy:
       fail-fast: false
@@ -28,29 +28,6 @@ jobs:
         run: |
           go test -covermode=atomic -coverprofile=cov.out ./...
           pct=$(go tool cover -func=cov.out | awk '/^total:/{print $3}')
-          echo "coverage=$pct"
-          [ "$pct" = "100.0%" ] || { echo "coverage below 100%"; exit 1; }
-
-  # The arm64 go1.27 encode kernel uses the integer VUMULL / VUMULL2 / VMUL the
-  # Go arm64 assembler only gained upstream in Go 1.27, so it builds under
-  # //go:build arm64 && go1.27 (encode_arm64_go127.go / .s). Exercise it on the
-  # gotip (1.27-devel) toolchain on native arm64, fuzz it against the stdlib, and
-  # gate it at 100% — this is the only job that compiles and covers that kernel.
-  test-arm64-go1_27:
-    runs-on: ubuntu-24.04-arm
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: { go-version: stable }
-      - run: go install golang.org/dl/gotip@latest && gotip download
-      - run: gotip version
-      - run: gotip vet ./...
-      - run: gotip test -v ./...
-      - run: gotip test -run '^$' -fuzz FuzzEncode -fuzztime 15s ./...
-      - name: coverage gate (100%, VUMULL kernel)
-        run: |
-          gotip test -covermode=atomic -coverprofile=cov.out ./...
-          pct=$(gotip tool cover -func=cov.out | awk '/^total:/{print $3}')
           echo "coverage=$pct"
           [ "$pct" = "100.0%" ] || { echo "coverage below 100%"; exit 1; }
 
