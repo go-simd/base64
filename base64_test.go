@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"testing"
 
-	cristalhq "github.com/cristalhq/base64"
 	emmansun "github.com/emmansun/base64"
 )
 
@@ -23,9 +22,10 @@ func TestEncode(t *testing.T) {
 		if got, want := emmansun.StdEncoding.EncodeToString(src), base64.StdEncoding.EncodeToString(src); got != want {
 			t.Fatalf("emmansun n=%d:\n got=%q\nwant=%q", n, got, want)
 		}
-		if got, want := cristalhq.StdEncoding.EncodeToString(src), base64.StdEncoding.EncodeToString(src); got != want {
-			t.Fatalf("cristalhq n=%d:\n got=%q\nwant=%q", n, got, want)
-		}
+		// cristalhq has no loong64 build (its arch tag lists predate loong64), so
+		// this differential cross-check lives in a build-tagged helper that is a
+		// no-op there. See base64_cristalhq_test.go.
+		checkCristalhq(t, n, src)
 	}
 }
 
@@ -236,14 +236,6 @@ func BenchmarkEncodeEmmansun(b *testing.B) {
 	}
 }
 
-// BenchmarkEncodeCristalhq benchmarks github.com/cristalhq/base64, a pure-Go
-// scalar-optimised (Turbo-Base64, no SIMD assembly) drop-in.
-func BenchmarkEncodeCristalhq(b *testing.B) {
-	src := benchData()
-	dst := make([]byte, cristalhq.StdEncoding.EncodedLen(len(src)))
-	b.SetBytes(int64(len(src)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		cristalhq.StdEncoding.Encode(dst, src)
-	}
-}
+// BenchmarkEncodeCristalhq and the cristalhq differential cross-check live in
+// base64_cristalhq_test.go (build-tagged !loong64, since cristalhq has no
+// loong64 build).
