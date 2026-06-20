@@ -154,6 +154,18 @@ unreleased toolchain, so it was removed.
 > for ppc64le — the kernel is now proven on real silicon, not just modeled. (The
 > s390x row below remains a cycle-model estimate only; no IBM Z hardware run yet.)
 
+### riscv64 — measured on real SpacemiT X60 (RVV 1.0): scalar parity
+
+> **Native hardware measurement** on a real **SpacemiT X60** (riscv64 RVV 1.0,
+> [GCC Compile Farm](https://portal.cfarm.net/), Go 1.26.4, June 2026).
+> **Honest result: scalar parity on riscv64** — RVV **encode 164 vs stdlib 166
+> MB/s**, **decode 154 vs 156 MB/s**. The byte-shuffle / nibble-spread kernel
+> does **not** beat the compiler's scalar `encoding/base64` on this core: the X60
+> is a low-power, *in-order* core and is currently the only widely-available RVV
+> 1.0 silicon. Shuffle-heavy kernels need cross-lane permute throughput that an
+> in-order core lacks; an out-of-order RVV core would likely lift this kernel.
+> **The encode/decode wins stay on amd64, arm64 and ppc64le.**
+
 ### s390x — llvm-mca cycle-model estimate
 
 > **Static analysis, NOT a hardware measurement; native perf pending real
