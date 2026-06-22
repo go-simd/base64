@@ -15,7 +15,6 @@ import (
 	"math/rand"
 	"testing"
 
-	cristalhq "github.com/cristalhq/base64"
 	emmansun "github.com/emmansun/base64"
 )
 
@@ -63,12 +62,7 @@ func BenchmarkParityEncode(b *testing.B) {
 				emmansun.StdEncoding.Encode(dst, src)
 			}
 		})
-		b.Run(sizeLabel(n)+"/cristalhq", func(b *testing.B) {
-			b.SetBytes(int64(n))
-			for i := 0; i < b.N; i++ {
-				cristalhq.StdEncoding.Encode(dst, src)
-			}
-		})
+		benchParityEncodeCristalhq(b, n, dst, src)
 	}
 }
 
