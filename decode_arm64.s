@@ -8,250 +8,189 @@ TEXT ·decodeBlocks(SB), NOSPLIT, $0-64
 	MOVD dst_base+0(FP), R0
 	MOVD src_base+24(FP), R1
 	MOVD n+48(FP), R2
-	MOVD $darmLutLo<>(SB), R4
-	VLD1 (R4), [V8.B16]
-	MOVD $darmLutHi<>(SB), R4
-	VLD1 (R4), [V9.B16]
-	MOVD $darmLutRoll<>(SB), R4
-	VLD1 (R4), [V10.B16]
-	MOVD $darmK0a<>(SB), R4
-	VLD1 (R4), [V11.B16]
-	MOVD $darmK0b<>(SB), R4
-	VLD1 (R4), [V12.B16]
-	MOVD $darmK1a<>(SB), R4
-	VLD1 (R4), [V13.B16]
-	MOVD $darmK1b<>(SB), R4
-	VLD1 (R4), [V14.B16]
-	MOVD $darmK2a<>(SB), R4
-	VLD1 (R4), [V15.B16]
-	MOVD $darmK2b<>(SB), R4
-	VLD1 (R4), [V16.B16]
-	MOVD $darmPshuf<>(SB), R4
-	VLD1 (R4), [V17.B16]
-	VMOVI $15, V18.B16
-	VMOVI $47, V19.B16
-	MOVD $0, R3
+	MOVD $darmLutLo<>(SB), R3
+	VLD1 (R3), [V8.B16, V9.B16, V10.B16, V11.B16]
+	MOVD $darmLutHi<>(SB), R3
+	VLD1 (R3), [V12.B16, V13.B16, V14.B16, V15.B16]
+	MOVD $0x40, R4
+	VDUP R4, V7.B16
+	VMOVI $0x80, V28.B16
+	MOVD $0, R5
 	CBZ R2, done
 loop:
-	VLD1 (R1), [V0.B16]
-	VAND V18.B16, V0.B16, V1.B16
-	VUSHR $4, V0.B16, V2.B16
-	VTBL V1.B16, [V8.B16], V3.B16
-	VTBL V2.B16, [V9.B16], V4.B16
-	VAND V3.B16, V4.B16, V5.B16
-	VMOV V5.D[0], R5
-	VMOV V5.D[1], R6
-	ORR R6, R5, R5
-	CBNZ R5, done
-	VCMEQ V19.B16, V0.B16, V6.B16
-	VADD V2.B16, V6.B16, V6.B16
-	VTBL V6.B16, [V10.B16], V6.B16
-	VADD V0.B16, V6.B16, V0.B16
-	VSHL $2, V0.S4, V1.S4
-	VAND V11.B16, V1.B16, V1.B16
-	VUSHR $12, V0.S4, V2.S4
-	VAND V12.B16, V2.B16, V2.B16
-	VORR V2.B16, V1.B16, V1.B16
-	VSHL $4, V0.S4, V2.S4
-	VAND V13.B16, V2.B16, V2.B16
-	VORR V2.B16, V1.B16, V1.B16
-	VUSHR $10, V0.S4, V2.S4
-	VAND V14.B16, V2.B16, V2.B16
-	VORR V2.B16, V1.B16, V1.B16
-	VSHL $6, V0.S4, V2.S4
-	VAND V15.B16, V2.B16, V2.B16
-	VORR V2.B16, V1.B16, V1.B16
-	VUSHR $8, V0.S4, V2.S4
-	VAND V16.B16, V2.B16, V2.B16
-	VORR V2.B16, V1.B16, V1.B16
-	VTBL V17.B16, [V1.B16], V1.B16
-	VST1 [V1.B16], (R0)
-	ADD $16, R1
-	ADD $12, R0
-	ADD $1, R3
+	VLD4.P 64(R1), [V20.B16, V21.B16, V22.B16, V23.B16]
+	VORR V21.B16, V20.B16, V24.B16
+	VORR V23.B16, V22.B16, V25.B16
+	VORR V25.B16, V24.B16, V24.B16
+	VAND V28.B16, V24.B16, V24.B16
+	VTBL V20.B16, [V8.B16, V9.B16, V10.B16, V11.B16], V0.B16
+	VTBL V21.B16, [V8.B16, V9.B16, V10.B16, V11.B16], V1.B16
+	VTBL V22.B16, [V8.B16, V9.B16, V10.B16, V11.B16], V2.B16
+	VTBL V23.B16, [V8.B16, V9.B16, V10.B16, V11.B16], V3.B16
+	VSUB V7.B16, V20.B16, V20.B16
+	WORD $0x4e147180
+	VSUB V7.B16, V21.B16, V21.B16
+	WORD $0x4e157181
+	VSUB V7.B16, V22.B16, V22.B16
+	WORD $0x4e167182
+	VSUB V7.B16, V23.B16, V23.B16
+	WORD $0x4e177183
+	WORD $0x6e273c10
+	WORD $0x6e273c31
+	WORD $0x6e273c52
+	WORD $0x6e273c73
+	VORR V17.B16, V16.B16, V16.B16
+	VORR V18.B16, V16.B16, V16.B16
+	VORR V19.B16, V16.B16, V16.B16
+	VORR V24.B16, V16.B16, V16.B16
+	WORD $0x6e30aa11
+	VMOV V17.B[0], R6
+	CBNZ R6, done
+	VSHL $2, V0.B16, V4.B16
+	VUSHR $4, V1.B16, V16.B16
+	VORR V16.B16, V4.B16, V4.B16
+	VSHL $4, V1.B16, V5.B16
+	VUSHR $2, V2.B16, V16.B16
+	VORR V16.B16, V5.B16, V5.B16
+	VSHL $6, V2.B16, V16.B16
+	VORR V16.B16, V3.B16, V6.B16
+	VST3.P [V4.B16, V5.B16, V6.B16], 48(R0)
+	ADD $1, R5
 	SUB $1, R2
 	CBNZ R2, loop
 done:
-	MOVD R3, ret+56(FP)
+	MOVD R5, ret+56(FP)
 	RET
 
-DATA darmLutLo<>+0(SB)/1, $0x15
-DATA darmLutLo<>+1(SB)/1, $0x11
-DATA darmLutLo<>+2(SB)/1, $0x11
-DATA darmLutLo<>+3(SB)/1, $0x11
-DATA darmLutLo<>+4(SB)/1, $0x11
-DATA darmLutLo<>+5(SB)/1, $0x11
-DATA darmLutLo<>+6(SB)/1, $0x11
-DATA darmLutLo<>+7(SB)/1, $0x11
-DATA darmLutLo<>+8(SB)/1, $0x11
-DATA darmLutLo<>+9(SB)/1, $0x11
-DATA darmLutLo<>+10(SB)/1, $0x13
-DATA darmLutLo<>+11(SB)/1, $0x1a
-DATA darmLutLo<>+12(SB)/1, $0x1b
-DATA darmLutLo<>+13(SB)/1, $0x1b
-DATA darmLutLo<>+14(SB)/1, $0x1b
-DATA darmLutLo<>+15(SB)/1, $0x1a
-GLOBL darmLutLo<>(SB), RODATA|NOPTR, $16
+DATA darmLutLo<>+0(SB)/1, $0xff
+DATA darmLutLo<>+1(SB)/1, $0xff
+DATA darmLutLo<>+2(SB)/1, $0xff
+DATA darmLutLo<>+3(SB)/1, $0xff
+DATA darmLutLo<>+4(SB)/1, $0xff
+DATA darmLutLo<>+5(SB)/1, $0xff
+DATA darmLutLo<>+6(SB)/1, $0xff
+DATA darmLutLo<>+7(SB)/1, $0xff
+DATA darmLutLo<>+8(SB)/1, $0xff
+DATA darmLutLo<>+9(SB)/1, $0xff
+DATA darmLutLo<>+10(SB)/1, $0xff
+DATA darmLutLo<>+11(SB)/1, $0xff
+DATA darmLutLo<>+12(SB)/1, $0xff
+DATA darmLutLo<>+13(SB)/1, $0xff
+DATA darmLutLo<>+14(SB)/1, $0xff
+DATA darmLutLo<>+15(SB)/1, $0xff
+DATA darmLutLo<>+16(SB)/1, $0xff
+DATA darmLutLo<>+17(SB)/1, $0xff
+DATA darmLutLo<>+18(SB)/1, $0xff
+DATA darmLutLo<>+19(SB)/1, $0xff
+DATA darmLutLo<>+20(SB)/1, $0xff
+DATA darmLutLo<>+21(SB)/1, $0xff
+DATA darmLutLo<>+22(SB)/1, $0xff
+DATA darmLutLo<>+23(SB)/1, $0xff
+DATA darmLutLo<>+24(SB)/1, $0xff
+DATA darmLutLo<>+25(SB)/1, $0xff
+DATA darmLutLo<>+26(SB)/1, $0xff
+DATA darmLutLo<>+27(SB)/1, $0xff
+DATA darmLutLo<>+28(SB)/1, $0xff
+DATA darmLutLo<>+29(SB)/1, $0xff
+DATA darmLutLo<>+30(SB)/1, $0xff
+DATA darmLutLo<>+31(SB)/1, $0xff
+DATA darmLutLo<>+32(SB)/1, $0xff
+DATA darmLutLo<>+33(SB)/1, $0xff
+DATA darmLutLo<>+34(SB)/1, $0xff
+DATA darmLutLo<>+35(SB)/1, $0xff
+DATA darmLutLo<>+36(SB)/1, $0xff
+DATA darmLutLo<>+37(SB)/1, $0xff
+DATA darmLutLo<>+38(SB)/1, $0xff
+DATA darmLutLo<>+39(SB)/1, $0xff
+DATA darmLutLo<>+40(SB)/1, $0xff
+DATA darmLutLo<>+41(SB)/1, $0xff
+DATA darmLutLo<>+42(SB)/1, $0xff
+DATA darmLutLo<>+43(SB)/1, $0x3e
+DATA darmLutLo<>+44(SB)/1, $0xff
+DATA darmLutLo<>+45(SB)/1, $0xff
+DATA darmLutLo<>+46(SB)/1, $0xff
+DATA darmLutLo<>+47(SB)/1, $0x3f
+DATA darmLutLo<>+48(SB)/1, $0x34
+DATA darmLutLo<>+49(SB)/1, $0x35
+DATA darmLutLo<>+50(SB)/1, $0x36
+DATA darmLutLo<>+51(SB)/1, $0x37
+DATA darmLutLo<>+52(SB)/1, $0x38
+DATA darmLutLo<>+53(SB)/1, $0x39
+DATA darmLutLo<>+54(SB)/1, $0x3a
+DATA darmLutLo<>+55(SB)/1, $0x3b
+DATA darmLutLo<>+56(SB)/1, $0x3c
+DATA darmLutLo<>+57(SB)/1, $0x3d
+DATA darmLutLo<>+58(SB)/1, $0xff
+DATA darmLutLo<>+59(SB)/1, $0xff
+DATA darmLutLo<>+60(SB)/1, $0xff
+DATA darmLutLo<>+61(SB)/1, $0xff
+DATA darmLutLo<>+62(SB)/1, $0xff
+DATA darmLutLo<>+63(SB)/1, $0xff
+GLOBL darmLutLo<>(SB), RODATA|NOPTR, $64
 
-DATA darmLutHi<>+0(SB)/1, $0x10
-DATA darmLutHi<>+1(SB)/1, $0x10
+DATA darmLutHi<>+0(SB)/1, $0xff
+DATA darmLutHi<>+1(SB)/1, $0x00
 DATA darmLutHi<>+2(SB)/1, $0x01
 DATA darmLutHi<>+3(SB)/1, $0x02
-DATA darmLutHi<>+4(SB)/1, $0x04
-DATA darmLutHi<>+5(SB)/1, $0x08
-DATA darmLutHi<>+6(SB)/1, $0x04
-DATA darmLutHi<>+7(SB)/1, $0x08
-DATA darmLutHi<>+8(SB)/1, $0x10
-DATA darmLutHi<>+9(SB)/1, $0x10
-DATA darmLutHi<>+10(SB)/1, $0x10
-DATA darmLutHi<>+11(SB)/1, $0x10
-DATA darmLutHi<>+12(SB)/1, $0x10
-DATA darmLutHi<>+13(SB)/1, $0x10
-DATA darmLutHi<>+14(SB)/1, $0x10
-DATA darmLutHi<>+15(SB)/1, $0x10
-GLOBL darmLutHi<>(SB), RODATA|NOPTR, $16
-
-DATA darmLutRoll<>+0(SB)/1, $0x00
-DATA darmLutRoll<>+1(SB)/1, $0x10
-DATA darmLutRoll<>+2(SB)/1, $0x13
-DATA darmLutRoll<>+3(SB)/1, $0x04
-DATA darmLutRoll<>+4(SB)/1, $0xbf
-DATA darmLutRoll<>+5(SB)/1, $0xbf
-DATA darmLutRoll<>+6(SB)/1, $0xb9
-DATA darmLutRoll<>+7(SB)/1, $0xb9
-DATA darmLutRoll<>+8(SB)/1, $0x00
-DATA darmLutRoll<>+9(SB)/1, $0x00
-DATA darmLutRoll<>+10(SB)/1, $0x00
-DATA darmLutRoll<>+11(SB)/1, $0x00
-DATA darmLutRoll<>+12(SB)/1, $0x00
-DATA darmLutRoll<>+13(SB)/1, $0x00
-DATA darmLutRoll<>+14(SB)/1, $0x00
-DATA darmLutRoll<>+15(SB)/1, $0x00
-GLOBL darmLutRoll<>(SB), RODATA|NOPTR, $16
-
-DATA darmK0a<>+0(SB)/1, $0xfc
-DATA darmK0a<>+1(SB)/1, $0x00
-DATA darmK0a<>+2(SB)/1, $0x00
-DATA darmK0a<>+3(SB)/1, $0x00
-DATA darmK0a<>+4(SB)/1, $0xfc
-DATA darmK0a<>+5(SB)/1, $0x00
-DATA darmK0a<>+6(SB)/1, $0x00
-DATA darmK0a<>+7(SB)/1, $0x00
-DATA darmK0a<>+8(SB)/1, $0xfc
-DATA darmK0a<>+9(SB)/1, $0x00
-DATA darmK0a<>+10(SB)/1, $0x00
-DATA darmK0a<>+11(SB)/1, $0x00
-DATA darmK0a<>+12(SB)/1, $0xfc
-DATA darmK0a<>+13(SB)/1, $0x00
-DATA darmK0a<>+14(SB)/1, $0x00
-DATA darmK0a<>+15(SB)/1, $0x00
-GLOBL darmK0a<>(SB), RODATA|NOPTR, $16
-
-DATA darmK0b<>+0(SB)/1, $0x03
-DATA darmK0b<>+1(SB)/1, $0x00
-DATA darmK0b<>+2(SB)/1, $0x00
-DATA darmK0b<>+3(SB)/1, $0x00
-DATA darmK0b<>+4(SB)/1, $0x03
-DATA darmK0b<>+5(SB)/1, $0x00
-DATA darmK0b<>+6(SB)/1, $0x00
-DATA darmK0b<>+7(SB)/1, $0x00
-DATA darmK0b<>+8(SB)/1, $0x03
-DATA darmK0b<>+9(SB)/1, $0x00
-DATA darmK0b<>+10(SB)/1, $0x00
-DATA darmK0b<>+11(SB)/1, $0x00
-DATA darmK0b<>+12(SB)/1, $0x03
-DATA darmK0b<>+13(SB)/1, $0x00
-DATA darmK0b<>+14(SB)/1, $0x00
-DATA darmK0b<>+15(SB)/1, $0x00
-GLOBL darmK0b<>(SB), RODATA|NOPTR, $16
-
-DATA darmK1a<>+0(SB)/1, $0x00
-DATA darmK1a<>+1(SB)/1, $0xf0
-DATA darmK1a<>+2(SB)/1, $0x00
-DATA darmK1a<>+3(SB)/1, $0x00
-DATA darmK1a<>+4(SB)/1, $0x00
-DATA darmK1a<>+5(SB)/1, $0xf0
-DATA darmK1a<>+6(SB)/1, $0x00
-DATA darmK1a<>+7(SB)/1, $0x00
-DATA darmK1a<>+8(SB)/1, $0x00
-DATA darmK1a<>+9(SB)/1, $0xf0
-DATA darmK1a<>+10(SB)/1, $0x00
-DATA darmK1a<>+11(SB)/1, $0x00
-DATA darmK1a<>+12(SB)/1, $0x00
-DATA darmK1a<>+13(SB)/1, $0xf0
-DATA darmK1a<>+14(SB)/1, $0x00
-DATA darmK1a<>+15(SB)/1, $0x00
-GLOBL darmK1a<>(SB), RODATA|NOPTR, $16
-
-DATA darmK1b<>+0(SB)/1, $0x00
-DATA darmK1b<>+1(SB)/1, $0x0f
-DATA darmK1b<>+2(SB)/1, $0x00
-DATA darmK1b<>+3(SB)/1, $0x00
-DATA darmK1b<>+4(SB)/1, $0x00
-DATA darmK1b<>+5(SB)/1, $0x0f
-DATA darmK1b<>+6(SB)/1, $0x00
-DATA darmK1b<>+7(SB)/1, $0x00
-DATA darmK1b<>+8(SB)/1, $0x00
-DATA darmK1b<>+9(SB)/1, $0x0f
-DATA darmK1b<>+10(SB)/1, $0x00
-DATA darmK1b<>+11(SB)/1, $0x00
-DATA darmK1b<>+12(SB)/1, $0x00
-DATA darmK1b<>+13(SB)/1, $0x0f
-DATA darmK1b<>+14(SB)/1, $0x00
-DATA darmK1b<>+15(SB)/1, $0x00
-GLOBL darmK1b<>(SB), RODATA|NOPTR, $16
-
-DATA darmK2a<>+0(SB)/1, $0x00
-DATA darmK2a<>+1(SB)/1, $0x00
-DATA darmK2a<>+2(SB)/1, $0xc0
-DATA darmK2a<>+3(SB)/1, $0x00
-DATA darmK2a<>+4(SB)/1, $0x00
-DATA darmK2a<>+5(SB)/1, $0x00
-DATA darmK2a<>+6(SB)/1, $0xc0
-DATA darmK2a<>+7(SB)/1, $0x00
-DATA darmK2a<>+8(SB)/1, $0x00
-DATA darmK2a<>+9(SB)/1, $0x00
-DATA darmK2a<>+10(SB)/1, $0xc0
-DATA darmK2a<>+11(SB)/1, $0x00
-DATA darmK2a<>+12(SB)/1, $0x00
-DATA darmK2a<>+13(SB)/1, $0x00
-DATA darmK2a<>+14(SB)/1, $0xc0
-DATA darmK2a<>+15(SB)/1, $0x00
-GLOBL darmK2a<>(SB), RODATA|NOPTR, $16
-
-DATA darmK2b<>+0(SB)/1, $0x00
-DATA darmK2b<>+1(SB)/1, $0x00
-DATA darmK2b<>+2(SB)/1, $0x3f
-DATA darmK2b<>+3(SB)/1, $0x00
-DATA darmK2b<>+4(SB)/1, $0x00
-DATA darmK2b<>+5(SB)/1, $0x00
-DATA darmK2b<>+6(SB)/1, $0x3f
-DATA darmK2b<>+7(SB)/1, $0x00
-DATA darmK2b<>+8(SB)/1, $0x00
-DATA darmK2b<>+9(SB)/1, $0x00
-DATA darmK2b<>+10(SB)/1, $0x3f
-DATA darmK2b<>+11(SB)/1, $0x00
-DATA darmK2b<>+12(SB)/1, $0x00
-DATA darmK2b<>+13(SB)/1, $0x00
-DATA darmK2b<>+14(SB)/1, $0x3f
-DATA darmK2b<>+15(SB)/1, $0x00
-GLOBL darmK2b<>(SB), RODATA|NOPTR, $16
-
-DATA darmPshuf<>+0(SB)/1, $0x00
-DATA darmPshuf<>+1(SB)/1, $0x01
-DATA darmPshuf<>+2(SB)/1, $0x02
-DATA darmPshuf<>+3(SB)/1, $0x04
-DATA darmPshuf<>+4(SB)/1, $0x05
-DATA darmPshuf<>+5(SB)/1, $0x06
-DATA darmPshuf<>+6(SB)/1, $0x08
-DATA darmPshuf<>+7(SB)/1, $0x09
-DATA darmPshuf<>+8(SB)/1, $0x0a
-DATA darmPshuf<>+9(SB)/1, $0x0c
-DATA darmPshuf<>+10(SB)/1, $0x0d
-DATA darmPshuf<>+11(SB)/1, $0x0e
-DATA darmPshuf<>+12(SB)/1, $0xff
-DATA darmPshuf<>+13(SB)/1, $0xff
-DATA darmPshuf<>+14(SB)/1, $0xff
-DATA darmPshuf<>+15(SB)/1, $0xff
-GLOBL darmPshuf<>(SB), RODATA|NOPTR, $16
+DATA darmLutHi<>+4(SB)/1, $0x03
+DATA darmLutHi<>+5(SB)/1, $0x04
+DATA darmLutHi<>+6(SB)/1, $0x05
+DATA darmLutHi<>+7(SB)/1, $0x06
+DATA darmLutHi<>+8(SB)/1, $0x07
+DATA darmLutHi<>+9(SB)/1, $0x08
+DATA darmLutHi<>+10(SB)/1, $0x09
+DATA darmLutHi<>+11(SB)/1, $0x0a
+DATA darmLutHi<>+12(SB)/1, $0x0b
+DATA darmLutHi<>+13(SB)/1, $0x0c
+DATA darmLutHi<>+14(SB)/1, $0x0d
+DATA darmLutHi<>+15(SB)/1, $0x0e
+DATA darmLutHi<>+16(SB)/1, $0x0f
+DATA darmLutHi<>+17(SB)/1, $0x10
+DATA darmLutHi<>+18(SB)/1, $0x11
+DATA darmLutHi<>+19(SB)/1, $0x12
+DATA darmLutHi<>+20(SB)/1, $0x13
+DATA darmLutHi<>+21(SB)/1, $0x14
+DATA darmLutHi<>+22(SB)/1, $0x15
+DATA darmLutHi<>+23(SB)/1, $0x16
+DATA darmLutHi<>+24(SB)/1, $0x17
+DATA darmLutHi<>+25(SB)/1, $0x18
+DATA darmLutHi<>+26(SB)/1, $0x19
+DATA darmLutHi<>+27(SB)/1, $0xff
+DATA darmLutHi<>+28(SB)/1, $0xff
+DATA darmLutHi<>+29(SB)/1, $0xff
+DATA darmLutHi<>+30(SB)/1, $0xff
+DATA darmLutHi<>+31(SB)/1, $0xff
+DATA darmLutHi<>+32(SB)/1, $0xff
+DATA darmLutHi<>+33(SB)/1, $0x1a
+DATA darmLutHi<>+34(SB)/1, $0x1b
+DATA darmLutHi<>+35(SB)/1, $0x1c
+DATA darmLutHi<>+36(SB)/1, $0x1d
+DATA darmLutHi<>+37(SB)/1, $0x1e
+DATA darmLutHi<>+38(SB)/1, $0x1f
+DATA darmLutHi<>+39(SB)/1, $0x20
+DATA darmLutHi<>+40(SB)/1, $0x21
+DATA darmLutHi<>+41(SB)/1, $0x22
+DATA darmLutHi<>+42(SB)/1, $0x23
+DATA darmLutHi<>+43(SB)/1, $0x24
+DATA darmLutHi<>+44(SB)/1, $0x25
+DATA darmLutHi<>+45(SB)/1, $0x26
+DATA darmLutHi<>+46(SB)/1, $0x27
+DATA darmLutHi<>+47(SB)/1, $0x28
+DATA darmLutHi<>+48(SB)/1, $0x29
+DATA darmLutHi<>+49(SB)/1, $0x2a
+DATA darmLutHi<>+50(SB)/1, $0x2b
+DATA darmLutHi<>+51(SB)/1, $0x2c
+DATA darmLutHi<>+52(SB)/1, $0x2d
+DATA darmLutHi<>+53(SB)/1, $0x2e
+DATA darmLutHi<>+54(SB)/1, $0x2f
+DATA darmLutHi<>+55(SB)/1, $0x30
+DATA darmLutHi<>+56(SB)/1, $0x31
+DATA darmLutHi<>+57(SB)/1, $0x32
+DATA darmLutHi<>+58(SB)/1, $0x33
+DATA darmLutHi<>+59(SB)/1, $0xff
+DATA darmLutHi<>+60(SB)/1, $0xff
+DATA darmLutHi<>+61(SB)/1, $0xff
+DATA darmLutHi<>+62(SB)/1, $0xff
+DATA darmLutHi<>+63(SB)/1, $0xff
+GLOBL darmLutHi<>(SB), RODATA|NOPTR, $64
 

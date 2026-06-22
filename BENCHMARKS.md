@@ -28,29 +28,43 @@ are real SIMD numbers (not a fallback).
 
 ## Decode
 
+The decode kernel was rewritten (2026-06-22) to emmansun's high-throughput
+deinterleaving design: 64 chars → 48 bytes per iteration via a VLD4.P load, a
+two-table VTBL+VTBX translate, a pure-shift 6→8-bit pack and a VST3.P store
+(previously a 16-char Lemire/Muła kernel at ~8.5 GB/s).
+
 | op | size | go-simd (GB/s) | scalar (stdlib) | emmansun (NEON ref) | speedup vs stdlib | ratio vs emmansun | verdict |
 |----|------|---------------:|----------------:|--------------------:|------------------:|------------------:|---------|
-| decode | 64 B   | 5.74 | 3.68 |  6.42 | 1.56× | 0.89× | beats stdlib; near NEON ref |
-| decode | 1 KiB  | 8.49 | 4.71 | 15.97 | 1.80× | 0.53× | beats stdlib; **trails NEON ref ~1.9×** |
-| decode | 16 KiB | 8.51 | 4.87 | 16.19 | 1.75× | 0.53× | beats stdlib; **trails NEON ref ~1.9×** |
-| decode | 1 MiB  | 8.52 | 4.85 | 16.27 | 1.76× | 0.52× | beats stdlib; **trails NEON ref ~1.9×** |
+| decode | 64 B   |  5.35 | 3.69 |  6.13 | 1.45× | 0.87× | beats stdlib; near NEON ref |
+| decode | 1 KiB  | 14.33 | 4.58 | 15.70 | 3.13× | 0.91× | beats stdlib ~3×, near NEON ref |
+| decode | 16 KiB | 14.48 | 4.81 | 15.94 | 3.01× | 0.91× | beats stdlib ~3×, near NEON ref |
+| decode | 1 MiB  | 14.67 | 4.67 | 15.99 | 3.14× | 0.92× | beats stdlib ~3×, near NEON ref |
+
+> **Correctness note.** go-simd's kernel adds a high-bit (byte ≥ 0x80) rejection
+> that emmansun's omits: emmansun **mis-accepts** non-ASCII bytes (e.g. it decodes
+> `"…0\xcf"` to 48 bytes with no error where the stdlib correctly returns
+> `illegal base64 data at input byte 63`). go-simd is byte- and error-identical to
+> `encoding/base64` on all input (fuzz-verified), so the residual ~9% vs emmansun
+> is the price of that correctness — go-simd would *match or beat* a correct NEON
+> reference.
 
 ## Summary
 
 * **Encode beats stdlib ~8×** at ≥1 KiB and reaches **parity with the
   best-in-class NEON reference (emmansun)** at 16 KiB+ (0.97–1.00×). It is ~4×
   faster than the scalar Turbo reference (cristalhq).
-* **Decode beats stdlib ~1.75×** but **lags emmansun ~1.9×** at all medium/large
-  sizes — emmansun sustains ~16 GB/s, go-simd ~8.5 GB/s. This is the clear gap.
+* **Decode now beats stdlib ~3×** (≥1 KiB) and reaches **~0.91× of emmansun** —
+  up from the previous ~0.52× (a ~1.7× kernel speedup), closing the gap from
+  ~1.9× behind to ~1.1× behind. The remaining margin is the correctness overhead
+  emmansun skips (see note).
 * Zero allocations on both encode and decode for all sizes.
 
 ### Action items
-1. **Decode kernel is the priority.** The NEON decode reaches only half of the
-   reference. Investigate emmansun's NEON lookup/pack sequence and regenerate the
-   go-asmgen kernel (better gather/shuffle for the 6→8 bit unpack; the decode
-   validate+pack appears to be the bottleneck).
+1. ~~Decode kernel is the priority (reached only half of the reference).~~
+   **Done** — rewritten to the 64→48 VLD4/VST3 design; ~3× stdlib, ~0.91×
+   emmansun, and strictly correct (high-bit rejection emmansun lacks).
 2. **amd64/AVX2 follow-up:** not measurable on this arm64 host. Run the same
    harness on a real x86_64 VM (Rosetta lacks AVX2; docker-qemu-user crashes Go)
    to confirm the AVX2 encode/decode parity vs emmansun AVX2/AVX-512.
-3. Tiny-input (64 B) encode trails the NEON ref by ~1.4× — fixed dispatch/tail
-   overhead dominates; a shorter SIMD-eligible threshold could help.
+3. Tiny-input (64 B) encode/decode trail the NEON ref by ~1.1–1.4× — fixed
+   dispatch/tail overhead dominates; a shorter SIMD-eligible threshold could help.

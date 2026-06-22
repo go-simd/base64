@@ -43,18 +43,23 @@ kernel. (An earlier go1.27-only `VUMULL`/`VMUL` multiply port of the amd64 trick
 was dropped: it ran ~16 GB/s — faster than the old shift kernel but slower than
 this VLD3/VST4 path, and it required an unreleased toolchain.)
 
-The decoder is Muła's vectorised base64: two nibble-keyed `PSHUFB`/`TBL`/`VPERM`
-LUTs (`lut_lo`/`lut_hi`) both validate each byte (a char is valid iff
-`lo & hi == 0`) and produce its 6-bit value via a "roll" offset LUT; the 4×6-bit
-fields are then packed into 3 bytes. On amd64 the pack uses the multiply-add pair
-(`PMADDUBSW`+`PMADDWD`); on arm64/ppc64le/s390x it is a **shift-only** gather
-(per-32-bit-word shifts + masks), so even arm64 — whose *encode* pack can't go
-wider because released-Go NEON lacks a vector integer multiply — gets a real
-decode kernel. On ANY invalid byte (whitespace, padding `=`, non-alphabet) the
-block bails to the scalar `encoding/base64`, so errors and offsets are exact. All
-six build targets are verified against `encoding/base64` (table + `FuzzDecode`,
-incl. invalid/whitespace/padding): amd64/arm64 natively, ppc64le and s390x under
-QEMU (see below).
+On amd64/ppc64le/s390x the decoder is Muła's vectorised base64: two nibble-keyed
+`PSHUFB`/`TBL`/`VPERM` LUTs (`lut_lo`/`lut_hi`) both validate each byte (a char is
+valid iff `lo & hi == 0`) and produce its 6-bit value via a "roll" offset LUT; the
+4×6-bit fields are then packed into 3 bytes — on amd64 with the multiply-add pair
+(`PMADDUBSW`+`PMADDWD`), on ppc64le/s390x with a **shift-only** per-32-bit-word
+gather. On **arm64** the decoder mirrors the encode side's aklomp/emmansun
+**deinterleaving-I/O** design: a `VLD4.P` load splits 64 chars into four
+char-planes, a two-table `VTBL`+`VTBX` translate maps each char to its 6-bit value
+(and flags out-of-range bytes), a high-bit (`≥0x80`) check rejects non-ASCII
+bytes, a pure-shift pack produces the 3 output bytes, and a `VST3.P` store writes
+48 bytes — 64→48 per iteration, ~3× the stdlib and ~0.9× the emmansun NEON
+reference (which it strictly out-correctness: emmansun mis-accepts `≥0x80` bytes
+the stdlib rejects). On ANY invalid byte (whitespace, padding `=`, non-alphabet,
+non-ASCII) the block bails to the scalar `encoding/base64`, so errors and offsets
+are exact. All six build targets are verified against `encoding/base64` (table +
+`FuzzDecode`, incl. invalid/whitespace/padding): amd64/arm64 natively, ppc64le and
+s390x under QEMU (see below).
 
 **Six SIMD targets, validated on seven architectures.** SIMD acceleration covers
 six targets (amd64 AVX2, arm64 NEON, riscv64 RVV, loong64 LSX, ppc64le VSX, s390x

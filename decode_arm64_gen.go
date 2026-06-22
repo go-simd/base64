@@ -1,27 +1,41 @@
 //go:build ignore
 
-// Command gen produces decode_arm64.s with go-asmgen: Lemire/Muła vectorised
-// base64 *decode* for arm64 NEON. Unlike base64 *encode* (whose pack needs an
-// integer multiply arm64's released-Go NEON lacks), decode's pack is a pure
-// shift/mask gather, so arm64 gets a real SIMD decode kernel.
+// Command gen produces decode_arm64.s with go-asmgen: the aklomp/emmansun NEON
+// base64 *decode* for arm64, the high-throughput deinterleaving-I/O design that
+// sustains ~14.6 GB/s on released Go — ~3x the stdlib and ~1.7x the old
+// Lemire/Muła 16-char kernel (~8.5 GB/s), within ~0.9x of the emmansun reference
+// (which it does correctly where emmansun mis-accepts >=0x80 bytes).
 //
-// Per 16 ASCII chars (VLD1), translate-and-validate with two VTBL nibble LUTs
-// (lutLo by low nibble, lutHi by high nibble): a char is valid iff (lo & hi) == 0;
-// the 16-byte AND is reduced to a GPR (two VMOV D-lane extracts + ORR) and on ANY
-// invalid byte (whitespace, padding '=', non-alphabet) the kernel returns the
-// number of groups decoded so far so the caller re-decodes the remainder with
-// encoding/base64 (errors + padded tail stay byte/offset-identical). The 6-bit
-// value is char + VTBL(lutRoll, hiNibble + (char==0x2f ? 0xFF : 0)).
+// Per iteration it consumes 64 base64 chars and emits 48 bytes:
 //
-// Pack 4x6-bit -> 3 bytes, per LITTLE-ENDIAN 32-bit lane W = a|b<<8|c<<16|d<<24:
+//	VLD4.P 64(src), [V20,V21,V22,V23]  // deinterleaving load: V20/V21/V22/V23
+//	                                   //   are the four char-planes of the 16
+//	                                   //   4-char groups (lane i = the k-th char
+//	                                   //   of group i).
 //
-//	P = (W<<2 & 0x0000FC) | (W>>12 & 0x000003)   // o0
-//	  | (W<<4 & 0x00F000) | (W>>10 & 0x000F00)   // o1
-//	  | (W<<6 & 0xC00000) | (W>>8  & 0x3F0000)   // o2
+// Each plane is translated char->6-bit value with a TWO-table lookup that also
+// flags invalid bytes: a VTBL through the first 64 LUT entries (V8..V11) handles
+// chars 0x00..0x3F, and a VTBX through the next 64 entries (V12..V15), after
+// subtracting 0x40, fills in chars 0x40..0x7F while leaving the first lookup in
+// place where it already hit. Invalid chars (whitespace, padding '=', any
+// non-alphabet byte, and bytes >= 0x80) map to 0xFF, i.e. a value >= 0x40, which
+// VCMHS against 0x40 detects; VUMAXV reduces the four invalid masks to one GPR
+// and the kernel returns the number of 64-char blocks decoded so far on any
+// invalid byte (so the caller re-decodes the remainder — including the padded
+// final quantum — with encoding/base64, keeping errors and offsets identical).
 //
-// so each lane holds bytes [o0,o1,o2,0]; a final VTBL compacts the 12 meaningful
-// bytes (lane indices 0,1,2 / 4,5,6 / 8,9,10 / 12,13,14) into the low 12 output
-// bytes and VST1 stores them. Run: go run decode_arm64_gen.go
+// The 4x6-bit -> 3-byte pack is pure shifts (no compaction shuffle needed):
+//
+//	o0 = (v0 << 2) | (v1 >> 4)
+//	o1 = (v1 << 4) | (v2 >> 2)
+//	o2 = (v2 << 6) |  v3
+//
+// and a single interleaving store VST3.P writes the 48 bytes back in order.
+//
+// VTBX, VCMHS and VUMAXV are not recognised by the released arm64 assembler, so
+// they are emitted as raw WORD encodings (the same ones emmansun uses).
+//
+// Run: go run decode_arm64_gen.go
 package main
 
 import (
@@ -33,33 +47,26 @@ import (
 	"github.com/go-asmgen/asmgen/emit"
 )
 
-func rep4(v uint32) []byte {
-	b := make([]byte, 16)
-	for i := 0; i < 4; i++ {
-		b[i*4+0] = byte(v)
-		b[i*4+1] = byte(v >> 8)
-		b[i*4+2] = byte(v >> 16)
-		b[i*4+3] = byte(v >> 24)
-	}
-	return b
+// stdDecodeLUT[c] = the 6-bit value of base64 (StdEncoding) char c, or 0xFF for
+// any non-alphabet byte. Indices 0x80..0xFF are implicitly invalid (the kernel
+// only loads the low 128 entries; bytes >= 0x80 fail the VCMHS >= 0x40 test
+// because neither VTBL nor VTBX writes them, leaving the VTBL's 0xFF default).
+var stdDecodeLUT = [128]byte{
+	255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+	255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+	255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62, 255, 255, 255, 63,
+	52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 255, 255, 255, 255, 255, 255,
+	255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+	15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 255, 255, 255, 255, 255,
+	255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+	41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 255, 255, 255, 255, 255,
 }
 
 func main() {
 	f := emit.NewFile("arm64")
 
-	lutLo := f.Data("darmLutLo", []byte{0x15, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x13, 0x1A, 0x1B, 0x1B, 0x1B, 0x1A})
-	lutHi := f.Data("darmLutHi", []byte{0x10, 0x10, 0x01, 0x02, 0x04, 0x08, 0x04, 0x08, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10})
-	lutRoll := f.Data("darmLutRoll", []byte{0, 16, 19, 4, 0xBF, 0xBF, 0xB9, 0xB9, 0, 0, 0, 0, 0, 0, 0, 0})
-	// Pack field masks (one value per 32-bit lane).
-	k0a := f.Data("darmK0a", rep4(0x000000FC)) // W<<2  -> o0 high
-	k0b := f.Data("darmK0b", rep4(0x00000003)) // W>>12 -> o0 low
-	k1a := f.Data("darmK1a", rep4(0x0000F000)) // W<<4  -> o1 high
-	k1b := f.Data("darmK1b", rep4(0x00000F00)) // W>>10 -> o1 low
-	k2a := f.Data("darmK2a", rep4(0x00C00000)) // W<<6  -> o2 high
-	k2b := f.Data("darmK2b", rep4(0x003F0000)) // W>>8  -> o2 low
-	// Final compaction VTBL control: gather lane bytes [0,1,2,4,5,6,8,9,10,12,13,14]
-	// into bytes 0..11; the high 4 read out-of-range -> VTBL yields 0.
-	pshuf := f.Data("darmPshuf", []byte{0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, 0xFF, 0xFF, 0xFF, 0xFF})
+	lutLo := f.Data("darmLutLo", stdDecodeLUT[:64]) // V8..V11: chars 0x00..0x3F
+	lutHi := f.Data("darmLutHi", stdDecodeLUT[64:]) // V12..V15: chars 0x40..0x7F
 
 	sig := abi.LayoutArgs(
 		[]abi.Arg{abi.Slice("dst"), abi.Slice("src"), abi.Scalar("n", abi.Int64)},
@@ -70,62 +77,74 @@ func main() {
 	b.LoadArg("dst_base", "R0").
 		LoadArg("src_base", "R1").
 		LoadArg("n", "R2").
-		// Load constant tables once.
-		Raw("MOVD $%s(SB), R4", lutLo).Raw("VLD1 (R4), [V8.B16]").
-		Raw("MOVD $%s(SB), R4", lutHi).Raw("VLD1 (R4), [V9.B16]").
-		Raw("MOVD $%s(SB), R4", lutRoll).Raw("VLD1 (R4), [V10.B16]").
-		Raw("MOVD $%s(SB), R4", k0a).Raw("VLD1 (R4), [V11.B16]").
-		Raw("MOVD $%s(SB), R4", k0b).Raw("VLD1 (R4), [V12.B16]").
-		Raw("MOVD $%s(SB), R4", k1a).Raw("VLD1 (R4), [V13.B16]").
-		Raw("MOVD $%s(SB), R4", k1b).Raw("VLD1 (R4), [V14.B16]").
-		Raw("MOVD $%s(SB), R4", k2a).Raw("VLD1 (R4), [V15.B16]").
-		Raw("MOVD $%s(SB), R4", k2b).Raw("VLD1 (R4), [V16.B16]").
-		Raw("MOVD $%s(SB), R4", pshuf).Raw("VLD1 (R4), [V17.B16]").
-		Raw("VMOVI $15, V18.B16"). // 0x0f mask
-		Raw("VMOVI $47, V19.B16"). // 0x2f ('/')
-		Raw("MOVD $0, R3").        // R3 = group counter
+		// Load the two 64-byte translate tables into V8..V11 and V12..V15.
+		Raw("MOVD $%s(SB), R3", lutLo).
+		Raw("VLD1 (R3), [V8.B16, V9.B16, V10.B16, V11.B16]").
+		Raw("MOVD $%s(SB), R3", lutHi).
+		Raw("VLD1 (R3), [V12.B16, V13.B16, V14.B16, V15.B16]").
+		Raw("MOVD $0x40, R4").Raw("VDUP R4, V7.B16"). // 0x40 splat (subtract + bound)
+		Raw("VMOVI $0x80, V28.B16").                  // high-bit mask (>=0x80 is invalid)
+		Raw("MOVD $0, R5").                           // R5 = block counter
 		Raw("CBZ R2, done").
 		Label("loop").
-		Raw("VLD1 (R1), [V0.B16]"). // V0 = 16 ASCII chars
-		// Nibbles: V1 = lo = char & 0x0f ; V2 = hi = char >> 4.
-		Raw("VAND V18.B16, V0.B16, V1.B16").
-		Raw("VUSHR $4, V0.B16, V2.B16").
-		// Translate LUTs.
-		Raw("VTBL V1.B16, [V8.B16], V3.B16"). // lo = lutLo[loNibble]
-		Raw("VTBL V2.B16, [V9.B16], V4.B16"). // hi = lutHi[hiNibble]
-		// Validity: err = lo & hi ; reduce to a GPR and bail if nonzero.
-		Raw("VAND V3.B16, V4.B16, V5.B16").
-		Raw("VMOV V5.D[0], R5").
-		Raw("VMOV V5.D[1], R6").
-		Raw("ORR R6, R5, R5").
-		Raw("CBNZ R5, done").
-		// roll index = hi + (char==0x2f ? 0xFF : 0).
-		Raw("VCMEQ V19.B16, V0.B16, V6.B16").  // 0xFF where char == '/'
-		Raw("VADD V2.B16, V6.B16, V6.B16").    // hi + eq2f
-		Raw("VTBL V6.B16, [V10.B16], V6.B16"). // roll = lutRoll[index]
-		Raw("VADD V0.B16, V6.B16, V0.B16").    // V0 = 6-bit values (a,b,c,d,...)
-		// Pack: per LE 32-bit lane W -> P = [o0,o1,o2,0].
-		Raw("VSHL $2, V0.S4, V1.S4").Raw("VAND V11.B16, V1.B16, V1.B16").   // (W<<2)&0xFC
-		Raw("VUSHR $12, V0.S4, V2.S4").Raw("VAND V12.B16, V2.B16, V2.B16"). // (W>>12)&0x03
-		Raw("VORR V2.B16, V1.B16, V1.B16").
-		Raw("VSHL $4, V0.S4, V2.S4").Raw("VAND V13.B16, V2.B16, V2.B16"). // (W<<4)&0xF000
-		Raw("VORR V2.B16, V1.B16, V1.B16").
-		Raw("VUSHR $10, V0.S4, V2.S4").Raw("VAND V14.B16, V2.B16, V2.B16"). // (W>>10)&0xF00
-		Raw("VORR V2.B16, V1.B16, V1.B16").
-		Raw("VSHL $6, V0.S4, V2.S4").Raw("VAND V15.B16, V2.B16, V2.B16"). // (W<<6)&0xC00000
-		Raw("VORR V2.B16, V1.B16, V1.B16").
-		Raw("VUSHR $8, V0.S4, V2.S4").Raw("VAND V16.B16, V2.B16, V2.B16"). // (W>>8)&0x3F0000
-		Raw("VORR V2.B16, V1.B16, V1.B16").                                // V1 = packed lanes [o0,o1,o2,0]
-		// Compact the 12 meaningful bytes into the low 12 lanes.
-		Raw("VTBL V17.B16, [V1.B16], V1.B16").
-		Raw("VST1 [V1.B16], (R0)"). // store 16 (low 12 meaningful)
-		Raw("ADD $16, R1").
-		Raw("ADD $12, R0").
-		Raw("ADD $1, R3").
+		// Deinterleaving load: V20..V23 = the four char-planes of 16 groups.
+		Raw("VLD4.P 64(R1), [V20.B16, V21.B16, V22.B16, V23.B16]").
+		// Detect high-bit (>=0x80) bytes, which the two 64-entry tables alone
+		// cannot flag (an out-of-range VTBL index just yields 0). Without this a
+		// byte like 0xCF would decode to 0 silently — the same correctness hole
+		// emmansun's kernel has; go-simd must match the stdlib's rejection
+		// exactly. We only need block-level "any high bit" (the scalar tail
+		// re-finds the exact offset), so OR the four char-planes, then isolate
+		// the high bit once into V24.
+		Raw("VORR V21.B16, V20.B16, V24.B16").
+		Raw("VORR V23.B16, V22.B16, V25.B16").
+		Raw("VORR V25.B16, V24.B16, V24.B16").
+		Raw("VAND V28.B16, V24.B16, V24.B16"). // V24 = OR-of-high-bits across the block
+		// First-table lookup (chars 0x00..0x3F).
+		Raw("VTBL V20.B16, [V8.B16, V9.B16, V10.B16, V11.B16], V0.B16").
+		Raw("VTBL V21.B16, [V8.B16, V9.B16, V10.B16, V11.B16], V1.B16").
+		Raw("VTBL V22.B16, [V8.B16, V9.B16, V10.B16, V11.B16], V2.B16").
+		Raw("VTBL V23.B16, [V8.B16, V9.B16, V10.B16, V11.B16], V3.B16").
+		// Second-table extend (chars 0x40..0x7F): subtract 0x40, VTBX keeps the
+		// first lookup where it already matched.
+		Raw("VSUB V7.B16, V20.B16, V20.B16").
+		Raw("WORD $0x4e147180"). // VTBX V20.B16, [V12.B16,V13.B16,V14.B16,V15.B16], V0.B16
+		Raw("VSUB V7.B16, V21.B16, V21.B16").
+		Raw("WORD $0x4e157181"). // VTBX V21.B16, [...], V1.B16
+		Raw("VSUB V7.B16, V22.B16, V22.B16").
+		Raw("WORD $0x4e167182"). // VTBX V22.B16, [...], V2.B16
+		Raw("VSUB V7.B16, V23.B16, V23.B16").
+		Raw("WORD $0x4e177183"). // VTBX V23.B16, [...], V3.B16
+		// Validity: any value >= 0x40 is invalid. VCMHS V7, Vk -> 0xFF where Vk>=0x40.
+		Raw("WORD $0x6e273c10"). // VCMHS V7.B16, V0.B16, V16.B16
+		Raw("WORD $0x6e273c31"). // VCMHS V7.B16, V1.B16, V17.B16
+		Raw("WORD $0x6e273c52"). // VCMHS V7.B16, V2.B16, V18.B16
+		Raw("WORD $0x6e273c73"). // VCMHS V7.B16, V3.B16, V19.B16
+		Raw("VORR V17.B16, V16.B16, V16.B16").
+		Raw("VORR V18.B16, V16.B16, V16.B16").
+		Raw("VORR V19.B16, V16.B16, V16.B16").
+		// Fold in the combined high-bit (>=0x80) mask.
+		Raw("VORR V24.B16, V16.B16, V16.B16").
+		// Reduce: VUMAXV -> max byte; nonzero means some invalid byte -> stop.
+		Raw("WORD $0x6e30aa11"). // VUMAXV V16.B16, V17
+		Raw("VMOV V17.B[0], R6").
+		Raw("CBNZ R6, done").
+		// Pack 4x6-bit -> 3 bytes (pure shifts).
+		Raw("VSHL $2, V0.B16, V4.B16").
+		Raw("VUSHR $4, V1.B16, V16.B16").
+		Raw("VORR V16.B16, V4.B16, V4.B16"). // o0 = (v0<<2)|(v1>>4)
+		Raw("VSHL $4, V1.B16, V5.B16").
+		Raw("VUSHR $2, V2.B16, V16.B16").
+		Raw("VORR V16.B16, V5.B16, V5.B16"). // o1 = (v1<<4)|(v2>>2)
+		Raw("VSHL $6, V2.B16, V16.B16").
+		Raw("VORR V16.B16, V3.B16, V6.B16"). // o2 = (v2<<6)|v3
+		// Interleaving store: 48 bytes in order.
+		Raw("VST3.P [V4.B16, V5.B16, V6.B16], 48(R0)").
+		Raw("ADD $1, R5").
 		Raw("SUB $1, R2").
 		Raw("CBNZ R2, loop").
 		Label("done").
-		Raw("MOVD R3, ret+56(FP)").
+		Raw("MOVD R5, ret+56(FP)").
 		Ret()
 	f.Add(b.Func())
 
