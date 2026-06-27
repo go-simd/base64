@@ -75,3 +75,23 @@ jobs:
   # the -fuzz engine itself inside QEMU-TCG (needs an in-container toolchain + module
   # download) is flaky on CI — a transient dep-download/TCG hiccup, not a kernel bug
   # (verified: the exact step passes locally at 5M+ execs/arch). So it is not run here.
+
+  # POWER8 ISA-guard lane. The `emulated` ppc64le job runs the POWER9 model, so an
+  # ISA-3.0 op illegal on POWER8 (LXVB16X/STXVB16X/CNTTZD) slips through there and
+  # only SIGILLs on a real POWER8 (cfarm112). This lane runs the SAME ppc64le test
+  # binary under QEMU_CPU=power8 (qemu-user honors QEMU_CPU; power8 == power8e ==
+  # power8_v2.0): if a VSX kernel emits an ISA-3.0 op without a POWER9 dispatch
+  # gate, it SIGILLs here. No 100% coverage gate: on POWER8 a properly-gated kernel
+  # takes the scalar fallback (kernel branch uncovered); coverage is enforced by
+  # the POWER9 `emulated` lane. The contract here is "must not SIGILL on POWER8".
+  emulated-ppc64le-power8:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with: { go-version: stable }
+      - run: docker run --privileged --rm tonistiigi/binfmt --install all
+      - name: build ppc64le test binary
+        run: GOOS=linux GOARCH=ppc64le go test -covermode=atomic -coverpkg=./... -c -o /tmp/cov.test .
+      - name: run ppc64le binary on POWER8 (must not SIGILL)
+        run: docker run --rm --platform linux/ppc64le -e QEMU_CPU=power8 -v /tmp:/t debian:trixie /t/cov.test -test.v
