@@ -37,6 +37,13 @@ func (enc *Encoding) EncodedLen(n int) int { return enc.std.EncodedLen(n) }
 
 // Encode writes the base64 of src into dst (len(dst) >= EncodedLen(len(src))).
 func (enc *Encoding) Encode(dst, src []byte) {
+	// Below encodeSIMDMin input bytes no arch's kernel runs (amd64 SSE 16,
+	// arm64 NEON 48), so encode tiny inputs straight via the stdlib and match it
+	// exactly rather than pay an extra frame for no SIMD work.
+	if len(src) < encodeSIMDMin {
+		enc.std.Encode(dst, src)
+		return
+	}
 	sd, dd := encodeSIMD(dst, src, enc.url)
 	enc.std.Encode(dst[dd:], src[sd:])
 }
@@ -57,6 +64,14 @@ func (enc *Encoding) DecodedLen(n int) int { return enc.std.DecodedLen(n) }
 // encoding/base64 so the result is byte- and error-identical (CorruptInputError
 // offsets match exactly).
 func (enc *Encoding) Decode(dst, src []byte) (int, error) {
+	// Below decodeSIMDMin src chars no arch's kernel runs (amd64 SSE/ppc64le/s390x
+	// 16+8, arm64 NEON 64), so hand short inputs straight to the stdlib and skip
+	// the decodeSIMD call + offset-rebase. This keeps small inputs exactly as fast
+	// as encoding/base64 — a SIMD path is never slower than stdlib. The threshold
+	// is per-arch so 24..63-char inputs still take the SIMD path where it exists.
+	if len(src) < decodeSIMDMin {
+		return enc.std.Decode(dst, src)
+	}
 	sd, dd := decodeSIMD(dst, src, enc.url)
 	n, err := enc.std.Decode(dst[dd:], src[sd:])
 	// Decode only ever reports a CorruptInputError; re-base its offset onto the

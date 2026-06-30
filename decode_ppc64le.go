@@ -23,9 +23,11 @@ func decodeBlocksURL(dst, src []byte, n int) int
 // the room the scalar tail decode needs.
 // On a pre-POWER9 CPU it reports no progress so the whole input goes to the stdlib.
 // url selects the -_ (URL/RawURL) alphabet kernel over the +/ one.
+// The caller (Decode) guarantees len(src) >= decodeSIMDMin (16+8); only a
+// pre-POWER9 CPU (no VSX) sends the work to the stdlib instead.
 func decodeSIMD(dst, src []byte, url bool) (srcDone, dstDone int) {
 	n := len(src)
-	if !hasVSX || n < 16+8 {
+	if !hasVSX {
 		return 0, 0
 	}
 	usable := n - 8

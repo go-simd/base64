@@ -4,6 +4,14 @@ package base64
 
 import "golang.org/x/sys/cpu"
 
+// encodeSIMDMin / decodeSIMDMin are the smallest inputs an amd64 kernel touches
+// (SSE encode needs 16 src bytes, SSE decode 16+8 chars). Below them Encode/Decode
+// hand straight to the stdlib so a tiny input is never slower than encoding/base64.
+const (
+	encodeSIMDMin = 16
+	decodeSIMDMin = 16 + 8
+)
+
 // encodeBlocksSSE (12 bytes -> 16 chars) and encodeBlocksAVX2 (24 -> 32) are the
 // vectorised base64 encoders for the StdEncoding alphabet (+/); the URL-suffixed
 // pair is the identical kernel with a -_ ASCII offset-LUT (the only difference is
@@ -31,14 +39,13 @@ func encodeSIMD(dst, src []byte, url bool) (srcDone, dstDone int) {
 		}
 		return groups * 24, groups * 32
 	}
-	if n >= 16 {
-		groups := (n-16)/12 + 1
-		if url {
-			encodeBlocksSSEURL(dst, src, groups)
-		} else {
-			encodeBlocksSSE(dst, src, groups)
-		}
-		return groups * 12, groups * 16
+	// n >= encodeSIMDMin (16) is guaranteed by the caller, so the SSE path always
+	// runs at least one group when AVX2 is unavailable.
+	groups := (n-16)/12 + 1
+	if url {
+		encodeBlocksSSEURL(dst, src, groups)
+	} else {
+		encodeBlocksSSE(dst, src, groups)
 	}
-	return 0, 0
+	return groups * 12, groups * 16
 }
