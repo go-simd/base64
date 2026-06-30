@@ -62,18 +62,51 @@ var stdDecodeLUT = [128]byte{
 	41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 255, 255, 255, 255, 255,
 }
 
+// decodeLUT returns the 128-entry char->6-bit-value table for the +/ alphabet, or
+// the -_ (URL/RawURL) alphabet when url is set: '-' (0x2D) decodes to 62 and '_'
+// (0x5F) to 63, while '+' (0x2B) and '/' (0x2F) become invalid (0xFF).
+func decodeLUT(url bool) [128]byte {
+	t := stdDecodeLUT
+	if url {
+		t['+'] = 255
+		t['/'] = 255
+		t['-'] = 62
+		t['_'] = 63
+	}
+	return t
+}
+
+type variant struct {
+	suffix string
+	url    bool
+}
+
+var variants = []variant{{"", false}, {"URL", true}}
+
 func main() {
 	f := emit.NewFile("arm64")
-
-	lutLo := f.Data("darmLutLo", stdDecodeLUT[:64]) // V8..V11: chars 0x00..0x3F
-	lutHi := f.Data("darmLutHi", stdDecodeLUT[64:]) // V12..V15: chars 0x40..0x7F
 
 	sig := abi.LayoutArgs(
 		[]abi.Arg{abi.Slice("dst"), abi.Slice("src"), abi.Scalar("n", abi.Int64)},
 		[]abi.Arg{abi.Scalar("ret", abi.Int64)},
 	)
+	for _, vr := range variants {
+		genVariant(f, vr, sig)
+	}
 
-	b := arm64.NewFunc("decodeBlocks", sig, 0)
+	if err := os.WriteFile("decode_arm64.s", []byte(f.String()), 0o644); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Println("wrote decode_arm64.s")
+}
+
+func genVariant(f *emit.File, vr variant, sig abi.Signature) {
+	lutTab := decodeLUT(vr.url)
+	lutLo := f.Data("darmLutLo"+vr.suffix, lutTab[:64]) // V8..V11: chars 0x00..0x3F
+	lutHi := f.Data("darmLutHi"+vr.suffix, lutTab[64:]) // V12..V15: chars 0x40..0x7F
+
+	b := arm64.NewFunc("decodeBlocks"+vr.suffix, sig, 0)
 	b.LoadArg("dst_base", "R0").
 		LoadArg("src_base", "R1").
 		LoadArg("n", "R2").
@@ -147,10 +180,4 @@ func main() {
 		Raw("MOVD R5, ret+56(FP)").
 		Ret()
 	f.Add(b.Func())
-
-	if err := os.WriteFile("decode_arm64.s", []byte(f.String()), 0o644); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	fmt.Println("wrote decode_arm64.s")
 }

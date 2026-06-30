@@ -56,6 +56,58 @@ loop:
 done:
 	RET
 
+TEXT ·encodeBlocksURL(SB), NOSPLIT, $0-56
+	MOVD dst_base+0(FP), R1
+	MOVD src_base+24(FP), R2
+	MOVD n+48(FP), R3
+	MOVD $s390Shuf<>(SB), R4
+	VL (R4), V16
+	MOVD $s390M0<>(SB), R4
+	VL (R4), V17
+	MOVD $s390M1<>(SB), R4
+	VL (R4), V18
+	MOVD $s390M2<>(SB), R4
+	VL (R4), V19
+	MOVD $s390M3<>(SB), R4
+	VL (R4), V20
+	MOVD $s390C51<>(SB), R4
+	VL (R4), V21
+	MOVD $s390C25<>(SB), R4
+	VL (R4), V22
+	MOVD $s390C1<>(SB), R4
+	VL (R4), V23
+	MOVD $s390LutURL<>(SB), R4
+	VL (R4), V24
+	CMPBEQ R3, $0, done
+loop:
+	VL (R2), V0
+	VPERM V0, V0, V16, V0
+	VESRLF $2, V0, V1
+	VN V1, V17, V1
+	VESRLF $4, V0, V2
+	VN V2, V18, V2
+	VO V2, V1, V1
+	VESRLF $6, V0, V2
+	VN V2, V19, V2
+	VO V2, V1, V1
+	VESRLF $8, V0, V2
+	VN V2, V20, V2
+	VO V2, V1, V1
+	VMNLB V1, V21, V2
+	VSB V2, V1, V2
+	VCHLB V1, V22, V3
+	VN V3, V23, V3
+	VAB V2, V3, V2
+	VPERM V24, V24, V2, V2
+	VAB V1, V2, V2
+	VST V2, (R1)
+	ADD $12, R2
+	ADD $16, R1
+	ADD $-1, R3
+	CMPBNE R3, $0, loop
+done:
+	RET
+
 DATA s390Shuf<>+0(SB)/1, $0x00
 DATA s390Shuf<>+1(SB)/1, $0x01
 DATA s390Shuf<>+2(SB)/1, $0x02
@@ -217,4 +269,22 @@ DATA s390Lut<>+13(SB)/1, $0xf0
 DATA s390Lut<>+14(SB)/1, $0x00
 DATA s390Lut<>+15(SB)/1, $0x00
 GLOBL s390Lut<>(SB), RODATA|NOPTR, $16
+
+DATA s390LutURL<>+0(SB)/1, $0x41
+DATA s390LutURL<>+1(SB)/1, $0x47
+DATA s390LutURL<>+2(SB)/1, $0xfc
+DATA s390LutURL<>+3(SB)/1, $0xfc
+DATA s390LutURL<>+4(SB)/1, $0xfc
+DATA s390LutURL<>+5(SB)/1, $0xfc
+DATA s390LutURL<>+6(SB)/1, $0xfc
+DATA s390LutURL<>+7(SB)/1, $0xfc
+DATA s390LutURL<>+8(SB)/1, $0xfc
+DATA s390LutURL<>+9(SB)/1, $0xfc
+DATA s390LutURL<>+10(SB)/1, $0xfc
+DATA s390LutURL<>+11(SB)/1, $0xfc
+DATA s390LutURL<>+12(SB)/1, $0xef
+DATA s390LutURL<>+13(SB)/1, $0x20
+DATA s390LutURL<>+14(SB)/1, $0x00
+DATA s390LutURL<>+15(SB)/1, $0x00
+GLOBL s390LutURL<>(SB), RODATA|NOPTR, $16
 

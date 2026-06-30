@@ -16,43 +16,41 @@ import (
 // the flag low. Every case must stay byte+error-identical to encoding/base64.
 func TestDecodeSIMDDispatch(t *testing.T) {
 	rng := rand.New(rand.NewSource(13))
-	check := func(in string) {
-		t.Helper()
-		gotB, gotErr := DecodeString(in)
-		wantB, wantErr := stdb64.StdEncoding.DecodeString(in)
-		if !bytes.Equal(gotB, wantB) || !errEqual(gotErr, wantErr) {
-			t.Fatalf("hasAVX2Decode=%v DecodeString(%q):\n got=%x err=%v\nwant=%x err=%v",
-				hasAVX2Decode, in, gotB, gotErr, wantB, wantErr)
+	for _, ep := range encodings() {
+		check := func(in string) {
+			t.Helper()
+			gotB, gotErr := ep.enc.DecodeString(in)
+			wantB, wantErr := ep.ref.DecodeString(in)
+			if !bytes.Equal(gotB, wantB) || !errEqual(gotErr, wantErr) {
+				t.Fatalf("%s hasAVX2Decode=%v DecodeString(%q):\n got=%x err=%v\nwant=%x err=%v",
+					ep.name, hasAVX2Decode, in, gotB, gotErr, wantB, wantErr)
+			}
 		}
-	}
-	// A spread of valid encodings (multiple SIMD blocks + tail) plus an invalid
-	// byte deep inside a block so a wrong bail offset would diverge.
-	cases := func() []string {
-		var cs []string
+		// A spread of valid encodings (multiple SIMD blocks + tail) plus an invalid
+		// byte deep inside a block so a wrong bail offset would diverge.
+		var cases []string
 		for _, n := range []int{0, 1, 5, 12, 15, 16, 17, 18, 24, 32, 48, 60, 96, 200} {
 			src := make([]byte, n)
 			rng.Read(src)
-			cs = append(cs, stdb64.StdEncoding.EncodeToString(src))
+			cases = append(cases, ep.ref.EncodeToString(src))
 		}
-		clean := stdb64.StdEncoding.EncodeToString(make([]byte, 120))
+		clean := ep.ref.EncodeToString(make([]byte, 120))
 		for _, off := range []int{0, 15, 16, 31, 33, 50} {
 			b := []byte(clean)
 			b[off] = '!'
-			cs = append(cs, string(b))
+			cases = append(cases, string(b))
 		}
-		return cs
-	}()
 
-	// Real CPU flag (AVX2 path on CI).
-	for _, in := range cases {
-		check(in)
-	}
-	// Force the SSE + scalar branches.
-	saved := hasAVX2Decode
-	defer func() { hasAVX2Decode = saved }()
-	hasAVX2Decode = false
-	for _, in := range cases {
-		check(in)
+		// Real CPU flag (AVX2 path on CI), then force the SSE + scalar branches.
+		saved := hasAVX2Decode
+		for _, in := range cases {
+			check(in)
+		}
+		hasAVX2Decode = false
+		for _, in := range cases {
+			check(in)
+		}
+		hasAVX2Decode = saved
 	}
 }
 

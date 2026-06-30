@@ -3,5 +3,6 @@
 package base64
 
 // encodeSIMD has no SIMD kernel on this arch; the whole input goes to the
-// standard library.
-func encodeSIMD(dst, src []byte) (srcDone, dstDone int) { return 0, 0 }
+// standard library (the url flag is irrelevant here — the wrapped encoding/base64
+// encoding already selects the alphabet).
+func encodeSIMD(dst, src []byte, url bool) (srcDone, dstDone int) { return 0, 0 }

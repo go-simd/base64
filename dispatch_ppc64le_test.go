@@ -4,7 +4,6 @@ package base64
 
 import (
 	"bytes"
-	stdb64 "encoding/base64"
 	"math/rand"
 	"testing"
 
@@ -24,37 +23,36 @@ func TestDispatchPPC64LE(t *testing.T) {
 	defer func() { hasVSX = saved }()
 
 	rng := rand.New(rand.NewSource(17))
-	cases := func() []string {
-		var cs []string
-		for _, n := range []int{0, 1, 5, 12, 15, 16, 17, 23, 24, 25, 48, 96, 200, 1000} {
-			src := make([]byte, n)
-			rng.Read(src)
-			cs = append(cs, stdb64.StdEncoding.EncodeToString(src))
-		}
-		// Invalid bytes deep inside clean blocks so a wrong bail offset diverges.
-		clean := stdb64.StdEncoding.EncodeToString(make([]byte, 120))
-		for _, off := range []int{0, 15, 16, 31, 33, 50} {
-			b := []byte(clean)
-			b[off] = '!'
-			cs = append(cs, string(b))
-		}
-		return cs
-	}()
 
 	check := func(tag string) {
 		t.Helper()
-		for _, in := range cases {
-			gotB, gotErr := DecodeString(in)
-			wantB, wantErr := stdb64.StdEncoding.DecodeString(in)
-			if !bytes.Equal(gotB, wantB) || !errEqual(gotErr, wantErr) {
-				t.Fatalf("%s DecodeString(%q):\n got=%x err=%v\nwant=%x err=%v",
-					tag, in, gotB, gotErr, wantB, wantErr)
+		for _, ep := range encodings() {
+			var cases []string
+			for _, n := range []int{0, 1, 5, 12, 15, 16, 17, 23, 24, 25, 48, 96, 200, 1000} {
+				src := make([]byte, n)
+				rng.Read(src)
+				cases = append(cases, ep.ref.EncodeToString(src))
 			}
-			// Round-trip the decoded bytes back through Encode.
-			if gotErr == nil {
-				enc := EncodeToString(wantB)
-				if want := stdb64.StdEncoding.EncodeToString(wantB); enc != want {
-					t.Fatalf("%s EncodeToString:\n got=%q\nwant=%q", tag, enc, want)
+			// Invalid bytes deep inside clean blocks so a wrong bail offset diverges.
+			clean := ep.ref.EncodeToString(make([]byte, 120))
+			for _, off := range []int{0, 15, 16, 31, 33, 50} {
+				b := []byte(clean)
+				b[off] = '!'
+				cases = append(cases, string(b))
+			}
+			for _, in := range cases {
+				gotB, gotErr := ep.enc.DecodeString(in)
+				wantB, wantErr := ep.ref.DecodeString(in)
+				if !bytes.Equal(gotB, wantB) || !errEqual(gotErr, wantErr) {
+					t.Fatalf("%s %s DecodeString(%q):\n got=%x err=%v\nwant=%x err=%v",
+						tag, ep.name, in, gotB, gotErr, wantB, wantErr)
+				}
+				// Round-trip the decoded bytes back through Encode.
+				if gotErr == nil {
+					enc := ep.enc.EncodeToString(wantB)
+					if want := ep.ref.EncodeToString(wantB); enc != want {
+						t.Fatalf("%s %s EncodeToString:\n got=%q\nwant=%q", tag, ep.name, enc, want)
+					}
 				}
 			}
 		}

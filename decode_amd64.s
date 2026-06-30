@@ -15,7 +15,7 @@ TEXT ·decodeBlocksSSE(SB), NOSPLIT, $0-64
 	MOVOU dmul2<>+0(SB), X12
 	MOVOU dpshuf<>+0(SB), X13
 	MOVOU dc0f<>+0(SB), X14
-	MOVOU dc2f<>+0(SB), X15
+	MOVOU dceq<>+0(SB), X15
 	XORQ AX, AX
 	TESTQ CX, CX
 	JZ sdone
@@ -75,7 +75,7 @@ vloop:
 	VPSHUFB Y2, Y8, Y4
 	VPTEST Y3, Y4
 	JNZ vdone
-	VPCMPEQB dc2f<>+0(SB), Y0, Y6
+	VPCMPEQB dceq<>+0(SB), Y0, Y6
 	VPADDB Y1, Y6, Y6
 	VPSHUFB Y6, Y10, Y7
 	VPADDB Y7, Y0, Y0
@@ -94,107 +94,97 @@ vdone:
 	VZEROUPPER
 	RET
 
-DATA dlutLo<>+0(SB)/1, $0x15
-DATA dlutLo<>+1(SB)/1, $0x11
-DATA dlutLo<>+2(SB)/1, $0x11
-DATA dlutLo<>+3(SB)/1, $0x11
-DATA dlutLo<>+4(SB)/1, $0x11
-DATA dlutLo<>+5(SB)/1, $0x11
-DATA dlutLo<>+6(SB)/1, $0x11
-DATA dlutLo<>+7(SB)/1, $0x11
-DATA dlutLo<>+8(SB)/1, $0x11
-DATA dlutLo<>+9(SB)/1, $0x11
-DATA dlutLo<>+10(SB)/1, $0x13
-DATA dlutLo<>+11(SB)/1, $0x1a
-DATA dlutLo<>+12(SB)/1, $0x1b
-DATA dlutLo<>+13(SB)/1, $0x1b
-DATA dlutLo<>+14(SB)/1, $0x1b
-DATA dlutLo<>+15(SB)/1, $0x1a
-DATA dlutLo<>+16(SB)/1, $0x15
-DATA dlutLo<>+17(SB)/1, $0x11
-DATA dlutLo<>+18(SB)/1, $0x11
-DATA dlutLo<>+19(SB)/1, $0x11
-DATA dlutLo<>+20(SB)/1, $0x11
-DATA dlutLo<>+21(SB)/1, $0x11
-DATA dlutLo<>+22(SB)/1, $0x11
-DATA dlutLo<>+23(SB)/1, $0x11
-DATA dlutLo<>+24(SB)/1, $0x11
-DATA dlutLo<>+25(SB)/1, $0x11
-DATA dlutLo<>+26(SB)/1, $0x13
-DATA dlutLo<>+27(SB)/1, $0x1a
-DATA dlutLo<>+28(SB)/1, $0x1b
-DATA dlutLo<>+29(SB)/1, $0x1b
-DATA dlutLo<>+30(SB)/1, $0x1b
-DATA dlutLo<>+31(SB)/1, $0x1a
-GLOBL dlutLo<>(SB), RODATA|NOPTR, $32
+TEXT ·decodeBlocksSSEURL(SB), NOSPLIT, $0-64
+	MOVQ dst_base+0(FP), DI
+	MOVQ src_base+24(FP), SI
+	MOVQ n+48(FP), CX
+	MOVOU dlutLoURL<>+0(SB), X8
+	MOVOU dlutHiURL<>+0(SB), X9
+	MOVOU dlutRollURL<>+0(SB), X10
+	MOVOU dmul1<>+0(SB), X11
+	MOVOU dmul2<>+0(SB), X12
+	MOVOU dpshuf<>+0(SB), X13
+	MOVOU dc0f<>+0(SB), X14
+	MOVOU dceqURL<>+0(SB), X15
+	XORQ AX, AX
+	TESTQ CX, CX
+	JZ sdone
+sloop:
+	MOVOU (SI), X0
+	MOVO X0, X1
+	PSRLW $4, X1
+	PAND X14, X1
+	MOVO X0, X2
+	PAND X14, X2
+	MOVO X9, X3
+	PSHUFB X1, X3
+	MOVO X8, X4
+	PSHUFB X2, X4
+	PTEST X3, X4
+	JNZ sdone
+	MOVO X0, X6
+	PCMPEQB X15, X6
+	PAND dckURL<>+0(SB), X6
+	PADDB X1, X6
+	MOVO X10, X7
+	PSHUFB X6, X7
+	PADDB X7, X0
+	PMADDUBSW X11, X0
+	PMADDWL X12, X0
+	PSHUFB X13, X0
+	MOVOU X0, (DI)
+	ADDQ $16, SI
+	ADDQ $12, DI
+	INCQ AX
+	DECQ CX
+	JNZ sloop
+sdone:
+	MOVQ AX, ret+56(FP)
+	RET
 
-DATA dlutHi<>+0(SB)/1, $0x10
-DATA dlutHi<>+1(SB)/1, $0x10
-DATA dlutHi<>+2(SB)/1, $0x01
-DATA dlutHi<>+3(SB)/1, $0x02
-DATA dlutHi<>+4(SB)/1, $0x04
-DATA dlutHi<>+5(SB)/1, $0x08
-DATA dlutHi<>+6(SB)/1, $0x04
-DATA dlutHi<>+7(SB)/1, $0x08
-DATA dlutHi<>+8(SB)/1, $0x10
-DATA dlutHi<>+9(SB)/1, $0x10
-DATA dlutHi<>+10(SB)/1, $0x10
-DATA dlutHi<>+11(SB)/1, $0x10
-DATA dlutHi<>+12(SB)/1, $0x10
-DATA dlutHi<>+13(SB)/1, $0x10
-DATA dlutHi<>+14(SB)/1, $0x10
-DATA dlutHi<>+15(SB)/1, $0x10
-DATA dlutHi<>+16(SB)/1, $0x10
-DATA dlutHi<>+17(SB)/1, $0x10
-DATA dlutHi<>+18(SB)/1, $0x01
-DATA dlutHi<>+19(SB)/1, $0x02
-DATA dlutHi<>+20(SB)/1, $0x04
-DATA dlutHi<>+21(SB)/1, $0x08
-DATA dlutHi<>+22(SB)/1, $0x04
-DATA dlutHi<>+23(SB)/1, $0x08
-DATA dlutHi<>+24(SB)/1, $0x10
-DATA dlutHi<>+25(SB)/1, $0x10
-DATA dlutHi<>+26(SB)/1, $0x10
-DATA dlutHi<>+27(SB)/1, $0x10
-DATA dlutHi<>+28(SB)/1, $0x10
-DATA dlutHi<>+29(SB)/1, $0x10
-DATA dlutHi<>+30(SB)/1, $0x10
-DATA dlutHi<>+31(SB)/1, $0x10
-GLOBL dlutHi<>(SB), RODATA|NOPTR, $32
-
-DATA dlutRoll<>+0(SB)/1, $0x00
-DATA dlutRoll<>+1(SB)/1, $0x10
-DATA dlutRoll<>+2(SB)/1, $0x13
-DATA dlutRoll<>+3(SB)/1, $0x04
-DATA dlutRoll<>+4(SB)/1, $0xbf
-DATA dlutRoll<>+5(SB)/1, $0xbf
-DATA dlutRoll<>+6(SB)/1, $0xb9
-DATA dlutRoll<>+7(SB)/1, $0xb9
-DATA dlutRoll<>+8(SB)/1, $0x00
-DATA dlutRoll<>+9(SB)/1, $0x00
-DATA dlutRoll<>+10(SB)/1, $0x00
-DATA dlutRoll<>+11(SB)/1, $0x00
-DATA dlutRoll<>+12(SB)/1, $0x00
-DATA dlutRoll<>+13(SB)/1, $0x00
-DATA dlutRoll<>+14(SB)/1, $0x00
-DATA dlutRoll<>+15(SB)/1, $0x00
-DATA dlutRoll<>+16(SB)/1, $0x00
-DATA dlutRoll<>+17(SB)/1, $0x10
-DATA dlutRoll<>+18(SB)/1, $0x13
-DATA dlutRoll<>+19(SB)/1, $0x04
-DATA dlutRoll<>+20(SB)/1, $0xbf
-DATA dlutRoll<>+21(SB)/1, $0xbf
-DATA dlutRoll<>+22(SB)/1, $0xb9
-DATA dlutRoll<>+23(SB)/1, $0xb9
-DATA dlutRoll<>+24(SB)/1, $0x00
-DATA dlutRoll<>+25(SB)/1, $0x00
-DATA dlutRoll<>+26(SB)/1, $0x00
-DATA dlutRoll<>+27(SB)/1, $0x00
-DATA dlutRoll<>+28(SB)/1, $0x00
-DATA dlutRoll<>+29(SB)/1, $0x00
-DATA dlutRoll<>+30(SB)/1, $0x00
-DATA dlutRoll<>+31(SB)/1, $0x00
-GLOBL dlutRoll<>(SB), RODATA|NOPTR, $32
+TEXT ·decodeBlocksAVX2URL(SB), NOSPLIT, $0-64
+	MOVQ dst_base+0(FP), DI
+	MOVQ src_base+24(FP), SI
+	MOVQ n+48(FP), CX
+	VMOVDQU dlutLoURL<>+0(SB), Y8
+	VMOVDQU dlutHiURL<>+0(SB), Y9
+	VMOVDQU dlutRollURL<>+0(SB), Y10
+	VMOVDQU dmul1<>+0(SB), Y11
+	VMOVDQU dmul2<>+0(SB), Y12
+	VMOVDQU dpshuf<>+0(SB), Y13
+	VMOVDQU dc0f<>+0(SB), Y14
+	VMOVDQU dpermd<>+0(SB), Y15
+	XORQ AX, AX
+	TESTQ CX, CX
+	JZ vdone
+vloop:
+	VMOVDQU (SI), Y0
+	VPSRLW $4, Y0, Y1
+	VPAND Y14, Y1, Y1
+	VPAND Y14, Y0, Y2
+	VPSHUFB Y1, Y9, Y3
+	VPSHUFB Y2, Y8, Y4
+	VPTEST Y3, Y4
+	JNZ vdone
+	VPCMPEQB dceqURL<>+0(SB), Y0, Y6
+	VPAND dckURL<>+0(SB), Y6, Y6
+	VPADDB Y1, Y6, Y6
+	VPSHUFB Y6, Y10, Y7
+	VPADDB Y7, Y0, Y0
+	VPMADDUBSW Y11, Y0, Y0
+	VPMADDWD Y12, Y0, Y0
+	VPSHUFB Y13, Y0, Y0
+	VPERMD Y0, Y15, Y0
+	VMOVDQU Y0, (DI)
+	ADDQ $32, SI
+	ADDQ $24, DI
+	INCQ AX
+	DECQ CX
+	JNZ vloop
+vdone:
+	MOVQ AX, ret+56(FP)
+	VZEROUPPER
+	RET
 
 DATA dmul1<>+0(SB)/1, $0x40
 DATA dmul1<>+1(SB)/1, $0x01
@@ -332,40 +322,6 @@ DATA dc0f<>+30(SB)/1, $0x0f
 DATA dc0f<>+31(SB)/1, $0x0f
 GLOBL dc0f<>(SB), RODATA|NOPTR, $32
 
-DATA dc2f<>+0(SB)/1, $0x2f
-DATA dc2f<>+1(SB)/1, $0x2f
-DATA dc2f<>+2(SB)/1, $0x2f
-DATA dc2f<>+3(SB)/1, $0x2f
-DATA dc2f<>+4(SB)/1, $0x2f
-DATA dc2f<>+5(SB)/1, $0x2f
-DATA dc2f<>+6(SB)/1, $0x2f
-DATA dc2f<>+7(SB)/1, $0x2f
-DATA dc2f<>+8(SB)/1, $0x2f
-DATA dc2f<>+9(SB)/1, $0x2f
-DATA dc2f<>+10(SB)/1, $0x2f
-DATA dc2f<>+11(SB)/1, $0x2f
-DATA dc2f<>+12(SB)/1, $0x2f
-DATA dc2f<>+13(SB)/1, $0x2f
-DATA dc2f<>+14(SB)/1, $0x2f
-DATA dc2f<>+15(SB)/1, $0x2f
-DATA dc2f<>+16(SB)/1, $0x2f
-DATA dc2f<>+17(SB)/1, $0x2f
-DATA dc2f<>+18(SB)/1, $0x2f
-DATA dc2f<>+19(SB)/1, $0x2f
-DATA dc2f<>+20(SB)/1, $0x2f
-DATA dc2f<>+21(SB)/1, $0x2f
-DATA dc2f<>+22(SB)/1, $0x2f
-DATA dc2f<>+23(SB)/1, $0x2f
-DATA dc2f<>+24(SB)/1, $0x2f
-DATA dc2f<>+25(SB)/1, $0x2f
-DATA dc2f<>+26(SB)/1, $0x2f
-DATA dc2f<>+27(SB)/1, $0x2f
-DATA dc2f<>+28(SB)/1, $0x2f
-DATA dc2f<>+29(SB)/1, $0x2f
-DATA dc2f<>+30(SB)/1, $0x2f
-DATA dc2f<>+31(SB)/1, $0x2f
-GLOBL dc2f<>(SB), RODATA|NOPTR, $32
-
 DATA dpermd<>+0(SB)/1, $0x00
 DATA dpermd<>+1(SB)/1, $0x00
 DATA dpermd<>+2(SB)/1, $0x00
@@ -399,4 +355,310 @@ DATA dpermd<>+29(SB)/1, $0x00
 DATA dpermd<>+30(SB)/1, $0x00
 DATA dpermd<>+31(SB)/1, $0x00
 GLOBL dpermd<>(SB), RODATA|NOPTR, $32
+
+DATA dlutLo<>+0(SB)/1, $0x15
+DATA dlutLo<>+1(SB)/1, $0x11
+DATA dlutLo<>+2(SB)/1, $0x11
+DATA dlutLo<>+3(SB)/1, $0x11
+DATA dlutLo<>+4(SB)/1, $0x11
+DATA dlutLo<>+5(SB)/1, $0x11
+DATA dlutLo<>+6(SB)/1, $0x11
+DATA dlutLo<>+7(SB)/1, $0x11
+DATA dlutLo<>+8(SB)/1, $0x11
+DATA dlutLo<>+9(SB)/1, $0x11
+DATA dlutLo<>+10(SB)/1, $0x13
+DATA dlutLo<>+11(SB)/1, $0x1a
+DATA dlutLo<>+12(SB)/1, $0x1b
+DATA dlutLo<>+13(SB)/1, $0x1b
+DATA dlutLo<>+14(SB)/1, $0x1b
+DATA dlutLo<>+15(SB)/1, $0x1a
+DATA dlutLo<>+16(SB)/1, $0x15
+DATA dlutLo<>+17(SB)/1, $0x11
+DATA dlutLo<>+18(SB)/1, $0x11
+DATA dlutLo<>+19(SB)/1, $0x11
+DATA dlutLo<>+20(SB)/1, $0x11
+DATA dlutLo<>+21(SB)/1, $0x11
+DATA dlutLo<>+22(SB)/1, $0x11
+DATA dlutLo<>+23(SB)/1, $0x11
+DATA dlutLo<>+24(SB)/1, $0x11
+DATA dlutLo<>+25(SB)/1, $0x11
+DATA dlutLo<>+26(SB)/1, $0x13
+DATA dlutLo<>+27(SB)/1, $0x1a
+DATA dlutLo<>+28(SB)/1, $0x1b
+DATA dlutLo<>+29(SB)/1, $0x1b
+DATA dlutLo<>+30(SB)/1, $0x1b
+DATA dlutLo<>+31(SB)/1, $0x1a
+GLOBL dlutLo<>(SB), RODATA|NOPTR, $32
+
+DATA dlutHi<>+0(SB)/1, $0x10
+DATA dlutHi<>+1(SB)/1, $0x10
+DATA dlutHi<>+2(SB)/1, $0x01
+DATA dlutHi<>+3(SB)/1, $0x02
+DATA dlutHi<>+4(SB)/1, $0x04
+DATA dlutHi<>+5(SB)/1, $0x08
+DATA dlutHi<>+6(SB)/1, $0x04
+DATA dlutHi<>+7(SB)/1, $0x08
+DATA dlutHi<>+8(SB)/1, $0x10
+DATA dlutHi<>+9(SB)/1, $0x10
+DATA dlutHi<>+10(SB)/1, $0x10
+DATA dlutHi<>+11(SB)/1, $0x10
+DATA dlutHi<>+12(SB)/1, $0x10
+DATA dlutHi<>+13(SB)/1, $0x10
+DATA dlutHi<>+14(SB)/1, $0x10
+DATA dlutHi<>+15(SB)/1, $0x10
+DATA dlutHi<>+16(SB)/1, $0x10
+DATA dlutHi<>+17(SB)/1, $0x10
+DATA dlutHi<>+18(SB)/1, $0x01
+DATA dlutHi<>+19(SB)/1, $0x02
+DATA dlutHi<>+20(SB)/1, $0x04
+DATA dlutHi<>+21(SB)/1, $0x08
+DATA dlutHi<>+22(SB)/1, $0x04
+DATA dlutHi<>+23(SB)/1, $0x08
+DATA dlutHi<>+24(SB)/1, $0x10
+DATA dlutHi<>+25(SB)/1, $0x10
+DATA dlutHi<>+26(SB)/1, $0x10
+DATA dlutHi<>+27(SB)/1, $0x10
+DATA dlutHi<>+28(SB)/1, $0x10
+DATA dlutHi<>+29(SB)/1, $0x10
+DATA dlutHi<>+30(SB)/1, $0x10
+DATA dlutHi<>+31(SB)/1, $0x10
+GLOBL dlutHi<>(SB), RODATA|NOPTR, $32
+
+DATA dlutRoll<>+0(SB)/1, $0x00
+DATA dlutRoll<>+1(SB)/1, $0x10
+DATA dlutRoll<>+2(SB)/1, $0x13
+DATA dlutRoll<>+3(SB)/1, $0x04
+DATA dlutRoll<>+4(SB)/1, $0xbf
+DATA dlutRoll<>+5(SB)/1, $0xbf
+DATA dlutRoll<>+6(SB)/1, $0xb9
+DATA dlutRoll<>+7(SB)/1, $0xb9
+DATA dlutRoll<>+8(SB)/1, $0x00
+DATA dlutRoll<>+9(SB)/1, $0x00
+DATA dlutRoll<>+10(SB)/1, $0x00
+DATA dlutRoll<>+11(SB)/1, $0x00
+DATA dlutRoll<>+12(SB)/1, $0x00
+DATA dlutRoll<>+13(SB)/1, $0x00
+DATA dlutRoll<>+14(SB)/1, $0x00
+DATA dlutRoll<>+15(SB)/1, $0x00
+DATA dlutRoll<>+16(SB)/1, $0x00
+DATA dlutRoll<>+17(SB)/1, $0x10
+DATA dlutRoll<>+18(SB)/1, $0x13
+DATA dlutRoll<>+19(SB)/1, $0x04
+DATA dlutRoll<>+20(SB)/1, $0xbf
+DATA dlutRoll<>+21(SB)/1, $0xbf
+DATA dlutRoll<>+22(SB)/1, $0xb9
+DATA dlutRoll<>+23(SB)/1, $0xb9
+DATA dlutRoll<>+24(SB)/1, $0x00
+DATA dlutRoll<>+25(SB)/1, $0x00
+DATA dlutRoll<>+26(SB)/1, $0x00
+DATA dlutRoll<>+27(SB)/1, $0x00
+DATA dlutRoll<>+28(SB)/1, $0x00
+DATA dlutRoll<>+29(SB)/1, $0x00
+DATA dlutRoll<>+30(SB)/1, $0x00
+DATA dlutRoll<>+31(SB)/1, $0x00
+GLOBL dlutRoll<>(SB), RODATA|NOPTR, $32
+
+DATA dceq<>+0(SB)/1, $0x2f
+DATA dceq<>+1(SB)/1, $0x2f
+DATA dceq<>+2(SB)/1, $0x2f
+DATA dceq<>+3(SB)/1, $0x2f
+DATA dceq<>+4(SB)/1, $0x2f
+DATA dceq<>+5(SB)/1, $0x2f
+DATA dceq<>+6(SB)/1, $0x2f
+DATA dceq<>+7(SB)/1, $0x2f
+DATA dceq<>+8(SB)/1, $0x2f
+DATA dceq<>+9(SB)/1, $0x2f
+DATA dceq<>+10(SB)/1, $0x2f
+DATA dceq<>+11(SB)/1, $0x2f
+DATA dceq<>+12(SB)/1, $0x2f
+DATA dceq<>+13(SB)/1, $0x2f
+DATA dceq<>+14(SB)/1, $0x2f
+DATA dceq<>+15(SB)/1, $0x2f
+DATA dceq<>+16(SB)/1, $0x2f
+DATA dceq<>+17(SB)/1, $0x2f
+DATA dceq<>+18(SB)/1, $0x2f
+DATA dceq<>+19(SB)/1, $0x2f
+DATA dceq<>+20(SB)/1, $0x2f
+DATA dceq<>+21(SB)/1, $0x2f
+DATA dceq<>+22(SB)/1, $0x2f
+DATA dceq<>+23(SB)/1, $0x2f
+DATA dceq<>+24(SB)/1, $0x2f
+DATA dceq<>+25(SB)/1, $0x2f
+DATA dceq<>+26(SB)/1, $0x2f
+DATA dceq<>+27(SB)/1, $0x2f
+DATA dceq<>+28(SB)/1, $0x2f
+DATA dceq<>+29(SB)/1, $0x2f
+DATA dceq<>+30(SB)/1, $0x2f
+DATA dceq<>+31(SB)/1, $0x2f
+GLOBL dceq<>(SB), RODATA|NOPTR, $32
+
+DATA dlutLoURL<>+0(SB)/1, $0x23
+DATA dlutLoURL<>+1(SB)/1, $0x03
+DATA dlutLoURL<>+2(SB)/1, $0x03
+DATA dlutLoURL<>+3(SB)/1, $0x03
+DATA dlutLoURL<>+4(SB)/1, $0x03
+DATA dlutLoURL<>+5(SB)/1, $0x03
+DATA dlutLoURL<>+6(SB)/1, $0x03
+DATA dlutLoURL<>+7(SB)/1, $0x03
+DATA dlutLoURL<>+8(SB)/1, $0x03
+DATA dlutLoURL<>+9(SB)/1, $0x03
+DATA dlutLoURL<>+10(SB)/1, $0x07
+DATA dlutLoURL<>+11(SB)/1, $0x1f
+DATA dlutLoURL<>+12(SB)/1, $0x1f
+DATA dlutLoURL<>+13(SB)/1, $0x1d
+DATA dlutLoURL<>+14(SB)/1, $0x1f
+DATA dlutLoURL<>+15(SB)/1, $0x0f
+DATA dlutLoURL<>+16(SB)/1, $0x23
+DATA dlutLoURL<>+17(SB)/1, $0x03
+DATA dlutLoURL<>+18(SB)/1, $0x03
+DATA dlutLoURL<>+19(SB)/1, $0x03
+DATA dlutLoURL<>+20(SB)/1, $0x03
+DATA dlutLoURL<>+21(SB)/1, $0x03
+DATA dlutLoURL<>+22(SB)/1, $0x03
+DATA dlutLoURL<>+23(SB)/1, $0x03
+DATA dlutLoURL<>+24(SB)/1, $0x03
+DATA dlutLoURL<>+25(SB)/1, $0x03
+DATA dlutLoURL<>+26(SB)/1, $0x07
+DATA dlutLoURL<>+27(SB)/1, $0x1f
+DATA dlutLoURL<>+28(SB)/1, $0x1f
+DATA dlutLoURL<>+29(SB)/1, $0x1d
+DATA dlutLoURL<>+30(SB)/1, $0x1f
+DATA dlutLoURL<>+31(SB)/1, $0x0f
+GLOBL dlutLoURL<>(SB), RODATA|NOPTR, $32
+
+DATA dlutHiURL<>+0(SB)/1, $0x01
+DATA dlutHiURL<>+1(SB)/1, $0x01
+DATA dlutHiURL<>+2(SB)/1, $0x02
+DATA dlutHiURL<>+3(SB)/1, $0x04
+DATA dlutHiURL<>+4(SB)/1, $0x20
+DATA dlutHiURL<>+5(SB)/1, $0x10
+DATA dlutHiURL<>+6(SB)/1, $0x20
+DATA dlutHiURL<>+7(SB)/1, $0x08
+DATA dlutHiURL<>+8(SB)/1, $0x01
+DATA dlutHiURL<>+9(SB)/1, $0x01
+DATA dlutHiURL<>+10(SB)/1, $0x01
+DATA dlutHiURL<>+11(SB)/1, $0x01
+DATA dlutHiURL<>+12(SB)/1, $0x01
+DATA dlutHiURL<>+13(SB)/1, $0x01
+DATA dlutHiURL<>+14(SB)/1, $0x01
+DATA dlutHiURL<>+15(SB)/1, $0x01
+DATA dlutHiURL<>+16(SB)/1, $0x01
+DATA dlutHiURL<>+17(SB)/1, $0x01
+DATA dlutHiURL<>+18(SB)/1, $0x02
+DATA dlutHiURL<>+19(SB)/1, $0x04
+DATA dlutHiURL<>+20(SB)/1, $0x20
+DATA dlutHiURL<>+21(SB)/1, $0x10
+DATA dlutHiURL<>+22(SB)/1, $0x20
+DATA dlutHiURL<>+23(SB)/1, $0x08
+DATA dlutHiURL<>+24(SB)/1, $0x01
+DATA dlutHiURL<>+25(SB)/1, $0x01
+DATA dlutHiURL<>+26(SB)/1, $0x01
+DATA dlutHiURL<>+27(SB)/1, $0x01
+DATA dlutHiURL<>+28(SB)/1, $0x01
+DATA dlutHiURL<>+29(SB)/1, $0x01
+DATA dlutHiURL<>+30(SB)/1, $0x01
+DATA dlutHiURL<>+31(SB)/1, $0x01
+GLOBL dlutHiURL<>(SB), RODATA|NOPTR, $32
+
+DATA dlutRollURL<>+0(SB)/1, $0xe0
+DATA dlutRollURL<>+1(SB)/1, $0x00
+DATA dlutRollURL<>+2(SB)/1, $0x11
+DATA dlutRollURL<>+3(SB)/1, $0x04
+DATA dlutRollURL<>+4(SB)/1, $0xbf
+DATA dlutRollURL<>+5(SB)/1, $0xbf
+DATA dlutRollURL<>+6(SB)/1, $0xb9
+DATA dlutRollURL<>+7(SB)/1, $0xb9
+DATA dlutRollURL<>+8(SB)/1, $0x00
+DATA dlutRollURL<>+9(SB)/1, $0x00
+DATA dlutRollURL<>+10(SB)/1, $0x00
+DATA dlutRollURL<>+11(SB)/1, $0x00
+DATA dlutRollURL<>+12(SB)/1, $0x00
+DATA dlutRollURL<>+13(SB)/1, $0x00
+DATA dlutRollURL<>+14(SB)/1, $0x00
+DATA dlutRollURL<>+15(SB)/1, $0x00
+DATA dlutRollURL<>+16(SB)/1, $0xe0
+DATA dlutRollURL<>+17(SB)/1, $0x00
+DATA dlutRollURL<>+18(SB)/1, $0x11
+DATA dlutRollURL<>+19(SB)/1, $0x04
+DATA dlutRollURL<>+20(SB)/1, $0xbf
+DATA dlutRollURL<>+21(SB)/1, $0xbf
+DATA dlutRollURL<>+22(SB)/1, $0xb9
+DATA dlutRollURL<>+23(SB)/1, $0xb9
+DATA dlutRollURL<>+24(SB)/1, $0x00
+DATA dlutRollURL<>+25(SB)/1, $0x00
+DATA dlutRollURL<>+26(SB)/1, $0x00
+DATA dlutRollURL<>+27(SB)/1, $0x00
+DATA dlutRollURL<>+28(SB)/1, $0x00
+DATA dlutRollURL<>+29(SB)/1, $0x00
+DATA dlutRollURL<>+30(SB)/1, $0x00
+DATA dlutRollURL<>+31(SB)/1, $0x00
+GLOBL dlutRollURL<>(SB), RODATA|NOPTR, $32
+
+DATA dceqURL<>+0(SB)/1, $0x5f
+DATA dceqURL<>+1(SB)/1, $0x5f
+DATA dceqURL<>+2(SB)/1, $0x5f
+DATA dceqURL<>+3(SB)/1, $0x5f
+DATA dceqURL<>+4(SB)/1, $0x5f
+DATA dceqURL<>+5(SB)/1, $0x5f
+DATA dceqURL<>+6(SB)/1, $0x5f
+DATA dceqURL<>+7(SB)/1, $0x5f
+DATA dceqURL<>+8(SB)/1, $0x5f
+DATA dceqURL<>+9(SB)/1, $0x5f
+DATA dceqURL<>+10(SB)/1, $0x5f
+DATA dceqURL<>+11(SB)/1, $0x5f
+DATA dceqURL<>+12(SB)/1, $0x5f
+DATA dceqURL<>+13(SB)/1, $0x5f
+DATA dceqURL<>+14(SB)/1, $0x5f
+DATA dceqURL<>+15(SB)/1, $0x5f
+DATA dceqURL<>+16(SB)/1, $0x5f
+DATA dceqURL<>+17(SB)/1, $0x5f
+DATA dceqURL<>+18(SB)/1, $0x5f
+DATA dceqURL<>+19(SB)/1, $0x5f
+DATA dceqURL<>+20(SB)/1, $0x5f
+DATA dceqURL<>+21(SB)/1, $0x5f
+DATA dceqURL<>+22(SB)/1, $0x5f
+DATA dceqURL<>+23(SB)/1, $0x5f
+DATA dceqURL<>+24(SB)/1, $0x5f
+DATA dceqURL<>+25(SB)/1, $0x5f
+DATA dceqURL<>+26(SB)/1, $0x5f
+DATA dceqURL<>+27(SB)/1, $0x5f
+DATA dceqURL<>+28(SB)/1, $0x5f
+DATA dceqURL<>+29(SB)/1, $0x5f
+DATA dceqURL<>+30(SB)/1, $0x5f
+DATA dceqURL<>+31(SB)/1, $0x5f
+GLOBL dceqURL<>(SB), RODATA|NOPTR, $32
+
+DATA dckURL<>+0(SB)/1, $0xfb
+DATA dckURL<>+1(SB)/1, $0xfb
+DATA dckURL<>+2(SB)/1, $0xfb
+DATA dckURL<>+3(SB)/1, $0xfb
+DATA dckURL<>+4(SB)/1, $0xfb
+DATA dckURL<>+5(SB)/1, $0xfb
+DATA dckURL<>+6(SB)/1, $0xfb
+DATA dckURL<>+7(SB)/1, $0xfb
+DATA dckURL<>+8(SB)/1, $0xfb
+DATA dckURL<>+9(SB)/1, $0xfb
+DATA dckURL<>+10(SB)/1, $0xfb
+DATA dckURL<>+11(SB)/1, $0xfb
+DATA dckURL<>+12(SB)/1, $0xfb
+DATA dckURL<>+13(SB)/1, $0xfb
+DATA dckURL<>+14(SB)/1, $0xfb
+DATA dckURL<>+15(SB)/1, $0xfb
+DATA dckURL<>+16(SB)/1, $0xfb
+DATA dckURL<>+17(SB)/1, $0xfb
+DATA dckURL<>+18(SB)/1, $0xfb
+DATA dckURL<>+19(SB)/1, $0xfb
+DATA dckURL<>+20(SB)/1, $0xfb
+DATA dckURL<>+21(SB)/1, $0xfb
+DATA dckURL<>+22(SB)/1, $0xfb
+DATA dckURL<>+23(SB)/1, $0xfb
+DATA dckURL<>+24(SB)/1, $0xfb
+DATA dckURL<>+25(SB)/1, $0xfb
+DATA dckURL<>+26(SB)/1, $0xfb
+DATA dckURL<>+27(SB)/1, $0xfb
+DATA dckURL<>+28(SB)/1, $0xfb
+DATA dckURL<>+29(SB)/1, $0xfb
+DATA dckURL<>+30(SB)/1, $0xfb
+DATA dckURL<>+31(SB)/1, $0xfb
+GLOBL dckURL<>(SB), RODATA|NOPTR, $32
 
