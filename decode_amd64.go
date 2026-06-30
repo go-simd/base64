@@ -43,16 +43,15 @@ func decodeSIMD(dst, src []byte, url bool) (srcDone, dstDone int) {
 		}
 		return got * 32, got * 24
 	}
-	if n >= 16+8 {
-		usable := n - 8
-		groups := usable / 16
-		var got int
-		if url {
-			got = decodeBlocksSSEURL(dst, src, groups)
-		} else {
-			got = decodeBlocksSSE(dst, src, groups)
-		}
-		return got * 16, got * 12
+	// n >= decodeSIMDMin (16+8) is guaranteed by the caller, so the SSE path always
+	// runs at least one group when AVX2 is unavailable.
+	usable := n - 8
+	groups := usable / 16
+	var got int
+	if url {
+		got = decodeBlocksSSEURL(dst, src, groups)
+	} else {
+		got = decodeBlocksSSE(dst, src, groups)
 	}
-	return 0, 0
+	return got * 16, got * 12
 }

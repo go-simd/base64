@@ -24,11 +24,10 @@ func decodeBlocksURL(dst, src []byte, n int) int
 // self-limits at the first block containing padding or any invalid byte, which
 // the stdlib then re-decodes for byte- and offset-identical results. url selects
 // the -_ (URL/RawURL) alphabet kernel over the +/ one.
+// Callers (Decode) only enter here with len(src) >= decodeSIMDMin (64), so at
+// least one block always runs.
 func decodeSIMD(dst, src []byte, url bool) (srcDone, dstDone int) {
 	blocks := len(src) / 64
-	if blocks == 0 {
-		return 0, 0
-	}
 	var got int
 	if url {
 		got = decodeBlocksURL(dst, src, blocks)

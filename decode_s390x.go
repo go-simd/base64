@@ -20,11 +20,9 @@ func decodeBlocksURL(dst, src []byte, n int) int
 // (where StdEncoding padding also lives) so the final group's over-store stays in
 // the room the scalar tail decode needs. url selects the -_ (URL/RawURL) alphabet
 // kernel over the +/ one.
+// The caller (Decode) guarantees len(src) >= decodeSIMDMin (16+8), so groups >= 1.
 func decodeSIMD(dst, src []byte, url bool) (srcDone, dstDone int) {
 	n := len(src)
-	if n < 16+8 {
-		return 0, 0
-	}
 	usable := n - 8
 	groups := usable / 16
 	var got int

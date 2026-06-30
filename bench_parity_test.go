@@ -18,7 +18,7 @@ import (
 	emmansun "github.com/emmansun/base64"
 )
 
-var paritySizes = []int{64, 1024, 16384, 1 << 20}
+var paritySizes = []int{16, 64, 1024, 16384, 1 << 20}
 
 func paritySrc(n int) []byte {
 	b := make([]byte, n)
@@ -28,6 +28,8 @@ func paritySrc(n int) []byte {
 
 func sizeLabel(n int) string {
 	switch n {
+	case 16:
+		return "16B"
 	case 64:
 		return "64B"
 	case 1024:

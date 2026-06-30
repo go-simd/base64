@@ -2,6 +2,14 @@
 
 package base64
 
+// encodeSIMDMin / decodeSIMDMin are the smallest inputs the arm64 kernels touch
+// (one 48-byte encode block, one 64-char decode block). Below them Encode/Decode
+// hand straight to the stdlib, so a tiny input is never slower than encoding/base64.
+const (
+	encodeSIMDMin = 48
+	decodeSIMDMin = 64
+)
+
 // encodeBlocks encodes n blocks of 48 input bytes into 64 base64 chars each via
 // NEON, using the aklomp/emmansun deinterleaving-I/O design: a VLD3.P
 // deinterleaving load splits the input into its three byte-planes, the four
@@ -18,11 +26,10 @@ func encodeBlocksURL(dst, src []byte, n int)
 // fit in src (each block is read and written exactly, no over-read), and reports
 // the bytes consumed in src and written in dst so the caller can finish the tail.
 // url selects the -_ (URL/RawURL) alphabet kernel over the +/ one.
+// Callers (Encode) only enter here with len(src) >= encodeSIMDMin (48), so at
+// least one block always runs.
 func encodeSIMD(dst, src []byte, url bool) (srcDone, dstDone int) {
 	blocks := len(src) / 48
-	if blocks == 0 {
-		return 0, 0
-	}
 	if url {
 		encodeBlocksURL(dst, src, blocks)
 	} else {
