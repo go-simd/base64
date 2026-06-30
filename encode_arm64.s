@@ -33,6 +33,35 @@ loop:
 done:
 	RET
 
+TEXT ·encodeBlocksURL(SB), NOSPLIT, $0-56
+	MOVD dst_base+0(FP), R0
+	MOVD src_base+24(FP), R1
+	MOVD n+48(FP), R2
+	MOVD $alphaURL<>(SB), R3
+	VLD1 (R3), [V8.B16, V9.B16, V10.B16, V11.B16]
+	MOVD $0x3f, R4
+	VDUP R4, V7.B16
+	CBZ R2, done
+loop:
+	VLD3.P 48(R1), [V0.B16, V1.B16, V2.B16]
+	VUSHR $2, V0.B16, V3.B16
+	VUSHR $4, V1.B16, V4.B16
+	VUSHR $6, V2.B16, V5.B16
+	VSLI $4, V0.B16, V4.B16
+	VSLI $2, V1.B16, V5.B16
+	VAND V7.B16, V4.B16, V4.B16
+	VAND V7.B16, V5.B16, V5.B16
+	VAND V7.B16, V2.B16, V6.B16
+	VTBL V3.B16, [V8.B16, V9.B16, V10.B16, V11.B16], V3.B16
+	VTBL V4.B16, [V8.B16, V9.B16, V10.B16, V11.B16], V4.B16
+	VTBL V5.B16, [V8.B16, V9.B16, V10.B16, V11.B16], V5.B16
+	VTBL V6.B16, [V8.B16, V9.B16, V10.B16, V11.B16], V6.B16
+	VST4.P [V3.B16, V4.B16, V5.B16, V6.B16], 64(R0)
+	SUB $1, R2
+	CBNZ R2, loop
+done:
+	RET
+
 DATA alpha<>+0(SB)/1, $0x41
 DATA alpha<>+1(SB)/1, $0x42
 DATA alpha<>+2(SB)/1, $0x43
@@ -98,4 +127,70 @@ DATA alpha<>+61(SB)/1, $0x39
 DATA alpha<>+62(SB)/1, $0x2b
 DATA alpha<>+63(SB)/1, $0x2f
 GLOBL alpha<>(SB), RODATA|NOPTR, $64
+
+DATA alphaURL<>+0(SB)/1, $0x41
+DATA alphaURL<>+1(SB)/1, $0x42
+DATA alphaURL<>+2(SB)/1, $0x43
+DATA alphaURL<>+3(SB)/1, $0x44
+DATA alphaURL<>+4(SB)/1, $0x45
+DATA alphaURL<>+5(SB)/1, $0x46
+DATA alphaURL<>+6(SB)/1, $0x47
+DATA alphaURL<>+7(SB)/1, $0x48
+DATA alphaURL<>+8(SB)/1, $0x49
+DATA alphaURL<>+9(SB)/1, $0x4a
+DATA alphaURL<>+10(SB)/1, $0x4b
+DATA alphaURL<>+11(SB)/1, $0x4c
+DATA alphaURL<>+12(SB)/1, $0x4d
+DATA alphaURL<>+13(SB)/1, $0x4e
+DATA alphaURL<>+14(SB)/1, $0x4f
+DATA alphaURL<>+15(SB)/1, $0x50
+DATA alphaURL<>+16(SB)/1, $0x51
+DATA alphaURL<>+17(SB)/1, $0x52
+DATA alphaURL<>+18(SB)/1, $0x53
+DATA alphaURL<>+19(SB)/1, $0x54
+DATA alphaURL<>+20(SB)/1, $0x55
+DATA alphaURL<>+21(SB)/1, $0x56
+DATA alphaURL<>+22(SB)/1, $0x57
+DATA alphaURL<>+23(SB)/1, $0x58
+DATA alphaURL<>+24(SB)/1, $0x59
+DATA alphaURL<>+25(SB)/1, $0x5a
+DATA alphaURL<>+26(SB)/1, $0x61
+DATA alphaURL<>+27(SB)/1, $0x62
+DATA alphaURL<>+28(SB)/1, $0x63
+DATA alphaURL<>+29(SB)/1, $0x64
+DATA alphaURL<>+30(SB)/1, $0x65
+DATA alphaURL<>+31(SB)/1, $0x66
+DATA alphaURL<>+32(SB)/1, $0x67
+DATA alphaURL<>+33(SB)/1, $0x68
+DATA alphaURL<>+34(SB)/1, $0x69
+DATA alphaURL<>+35(SB)/1, $0x6a
+DATA alphaURL<>+36(SB)/1, $0x6b
+DATA alphaURL<>+37(SB)/1, $0x6c
+DATA alphaURL<>+38(SB)/1, $0x6d
+DATA alphaURL<>+39(SB)/1, $0x6e
+DATA alphaURL<>+40(SB)/1, $0x6f
+DATA alphaURL<>+41(SB)/1, $0x70
+DATA alphaURL<>+42(SB)/1, $0x71
+DATA alphaURL<>+43(SB)/1, $0x72
+DATA alphaURL<>+44(SB)/1, $0x73
+DATA alphaURL<>+45(SB)/1, $0x74
+DATA alphaURL<>+46(SB)/1, $0x75
+DATA alphaURL<>+47(SB)/1, $0x76
+DATA alphaURL<>+48(SB)/1, $0x77
+DATA alphaURL<>+49(SB)/1, $0x78
+DATA alphaURL<>+50(SB)/1, $0x79
+DATA alphaURL<>+51(SB)/1, $0x7a
+DATA alphaURL<>+52(SB)/1, $0x30
+DATA alphaURL<>+53(SB)/1, $0x31
+DATA alphaURL<>+54(SB)/1, $0x32
+DATA alphaURL<>+55(SB)/1, $0x33
+DATA alphaURL<>+56(SB)/1, $0x34
+DATA alphaURL<>+57(SB)/1, $0x35
+DATA alphaURL<>+58(SB)/1, $0x36
+DATA alphaURL<>+59(SB)/1, $0x37
+DATA alphaURL<>+60(SB)/1, $0x38
+DATA alphaURL<>+61(SB)/1, $0x39
+DATA alphaURL<>+62(SB)/1, $0x2d
+DATA alphaURL<>+63(SB)/1, $0x5f
+GLOBL alphaURL<>(SB), RODATA|NOPTR, $64
 

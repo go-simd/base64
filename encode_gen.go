@@ -39,8 +39,25 @@ var (
 	mulhiBytes = []byte{0x40, 0x00, 0x00, 0x04} // 0x04000040
 	mask2Bytes = []byte{0xf0, 0x03, 0x3f, 0x00} // 0x003f03f0
 	mulloBytes = []byte{0x10, 0x00, 0x00, 0x01} // 0x01000010
-	lutBytes   = []byte{65, 71, 252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 237, 240, 0, 0}
+	// lutBytes is the PSHUFB ASCII offset-LUT keyed by a range bucket. For
+	// StdEncoding (+/) the last two non-zero entries (237,240) shift index 62->'+'
+	// (62+237=299=43 mod 256) and 63->'/' (63+240=303=47). For URL/RawURL (-_) they
+	// become 239,32: 62+239=301=45='-' and 63+32=95='_'. All other entries (the
+	// A-Z/a-z/0-9 ranges) are alphabet-independent.
+	lutBytes    = []byte{65, 71, 252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 237, 240, 0, 0}
+	lutURLBytes = []byte{65, 71, 252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 239, 32, 0, 0}
 )
+
+// variant pairs an ASCII offset-LUT with the func-name suffix it generates.
+type variant struct {
+	suffix string
+	lut    []byte
+}
+
+var variants = []variant{
+	{"", lutBytes},       // StdEncoding (+/)
+	{"URL", lutURLBytes}, // URL/RawURL (-_)
+}
 
 func sig() abi.Signature {
 	return abi.LayoutArgs(
@@ -52,7 +69,7 @@ func sig() abi.Signature {
 func main() {
 	f := emit.NewFile("amd64")
 
-	// ---- SSE2/SSSE3: 12 -> 16 ----
+	// Alphabet-independent constant tables, shared across the +/ and -_ variants.
 	shuf := f.Data("shuf", shufBytes)
 	m1 := f.Data("mask1", rep(mask1Bytes, 4))
 	mh := f.Data("mulhi", rep(mulhiBytes, 4))
@@ -60,9 +77,40 @@ func main() {
 	ml := f.Data("mullo", rep(mulloBytes, 4))
 	c51 := f.Data("c51", repByte(51, 16))
 	c25 := f.Data("c25", repByte(25, 16))
-	lut := f.Data("lut", lutBytes)
 
-	s := amd64.NewFunc("encodeBlocksSSE", sig(), 0)
+	shuf2 := f.Data("shuf2", rep(shufBytes, 2)) // block-0 mask (VINSERTI128 layout)
+	shuf4lane0 := make([]byte, 16)
+	for i := range shufBytes {
+		shuf4lane0[i] = shufBytes[i] + 4
+	}
+	shuf4 := f.Data("shuf4", append(append([]byte{}, shuf4lane0...), shufBytes...))
+	m1b := f.Data("mask1b", rep(mask1Bytes, 8))
+	mhb := f.Data("mulhib", rep(mulhiBytes, 8))
+	m2b := f.Data("mask2b", rep(mask2Bytes, 8))
+	mlb := f.Data("mullob", rep(mulloBytes, 8))
+	c51b := f.Data("c51b", repByte(51, 32))
+	c25b := f.Data("c25b", repByte(25, 32))
+
+	for _, vr := range variants {
+		genVariant(f, vr, shuf, m1, mh, m2, ml, c51, c25,
+			shuf2, shuf4, m1b, mhb, m2b, mlb, c51b, c25b)
+	}
+
+	if err := os.WriteFile("encode_amd64.s", []byte(f.String()), 0o644); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Println("wrote encode_amd64.s")
+}
+
+func genVariant(f *emit.File, vr variant,
+	shuf, m1, mh, m2, ml, c51, c25,
+	shuf2, shuf4, m1b, mhb, m2b, mlb, c51b, c25b string) {
+
+	// ---- SSE2/SSSE3: 12 -> 16 ----
+	lut := f.Data("lut"+vr.suffix, vr.lut)
+
+	s := amd64.NewFunc("encodeBlocksSSE"+vr.suffix, sig(), 0)
 	s.LoadArg("dst_base", "DI").LoadArg("src_base", "SI").LoadArg("n", "CX").
 		Raw("MOVOU %s+0(SB), X7", shuf).
 		Raw("MOVOU %s+0(SB), X8", m1).
@@ -89,28 +137,16 @@ func main() {
 	f.Add(s.Func())
 
 	// ---- AVX2: 24 -> 32, 2x-unrolled, VINSERTI128-free steady state ----
-	shuf2 := f.Data("shuf2", rep(shufBytes, 2)) // block-0 mask (VINSERTI128 layout)
-	// shuf4: spread mask for the -4-offset load. A VMOVDQU at src-4 already places
-	// lane1=bytes12-27 (no VINSERTI128); lane0=bytes(-4..11), so lane0's shuffle is
-	// the standard mask shifted by +4, lane1's is the standard mask.
-	shuf4lane0 := make([]byte, 16)
-	for i := range shufBytes {
-		shuf4lane0[i] = shufBytes[i] + 4
-	}
-	shuf4 := f.Data("shuf4", append(append([]byte{}, shuf4lane0...), shufBytes...))
-	m1b := f.Data("mask1b", rep(mask1Bytes, 8))
-	mhb := f.Data("mulhib", rep(mulhiBytes, 8))
-	m2b := f.Data("mask2b", rep(mask2Bytes, 8))
-	mlb := f.Data("mullob", rep(mulloBytes, 8))
-	c51b := f.Data("c51b", repByte(51, 32))
-	c25b := f.Data("c25b", repByte(25, 32))
-	lutb := f.Data("lutb", rep(lutBytes, 2))
+	// shuf2 is the block-0 mask (VINSERTI128 layout); shuf4 is the spread mask for
+	// the -4-offset load (lane0 shifted +4, lane1 standard); both are
+	// alphabet-independent and passed in. lutb is the per-variant offset-LUT, doubled.
+	lutb := f.Data("lutb"+vr.suffix, rep(vr.lut, 2))
 
 	// Steady state loads 32 bytes at src-4 and spreads with one VPSHUFB (shuf4) —
 	// no VINSERTI128, relieving the shuffle port (the bottleneck). Only block 0 must
 	// use VINSERTI128+shuf2 (a -4 load there would read before src). Y8=shuf4;
 	// Y9-Y15 = mask1/mulhi/mask2/mullo/c51/c25/lut; A=Y0-2, B=Y3-5 interleave for ILP.
-	vv := amd64.NewFunc("encodeBlocksAVX2", sig(), 0)
+	vv := amd64.NewFunc("encodeBlocksAVX2"+vr.suffix, sig(), 0)
 	vv.LoadArg("dst_base", "DI").LoadArg("src_base", "SI").LoadArg("n", "CX").
 		Raw("VMOVDQU %s+0(SB), Y8", shuf4).
 		Raw("VMOVDQU %s+0(SB), Y9", m1b).
@@ -165,10 +201,4 @@ func main() {
 		Raw("VMOVDQU Y5, (DI)").
 		Label("vdone").Raw("VZEROUPPER").Ret()
 	f.Add(vv.Func())
-
-	if err := os.WriteFile("encode_amd64.s", []byte(f.String()), 0o644); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	fmt.Println("wrote encode_amd64.s")
 }

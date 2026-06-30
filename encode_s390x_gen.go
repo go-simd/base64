@@ -70,52 +70,61 @@ func main() {
 	c51 := f.Data("s390C51", repByte(51))
 	c25 := f.Data("s390C25", repByte(25))
 	c1 := f.Data("s390C1", repByte(1))
-	lut := f.Data("s390Lut", []byte{65, 71, 252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 237, 240, 0, 0})
+	// ASCII offset-LUT: Std (+/) uses ...237,240 (62->'+', 63->'/'); URL/RawURL (-_)
+	// uses ...239,32 (62->'-', 63->'_'). All other entries are alphabet-shared.
+	lutStd := []byte{65, 71, 252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 237, 240, 0, 0}
+	lutURL := []byte{65, 71, 252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 239, 32, 0, 0}
 
 	sig := abi.LayoutArgs(
 		[]abi.Arg{abi.Slice("dst"), abi.Slice("src"), abi.Scalar("n", abi.Int64)},
 		nil,
 	)
 
-	g := s390x.NewFunc("encodeBlocks", sig, 0)
-	g.LoadArg("dst_base", "R1").
-		LoadArg("src_base", "R2").
-		LoadArg("n", "R3").
-		Raw("MOVD $%s(SB), R4", shuf).Raw("VL (R4), V16").
-		Raw("MOVD $%s(SB), R4", m0).Raw("VL (R4), V17").
-		Raw("MOVD $%s(SB), R4", m1).Raw("VL (R4), V18").
-		Raw("MOVD $%s(SB), R4", m2).Raw("VL (R4), V19").
-		Raw("MOVD $%s(SB), R4", m3).Raw("VL (R4), V20").
-		Raw("MOVD $%s(SB), R4", c51).Raw("VL (R4), V21").
-		Raw("MOVD $%s(SB), R4", c25).Raw("VL (R4), V22").
-		Raw("MOVD $%s(SB), R4", c1).Raw("VL (R4), V23").
-		Raw("MOVD $%s(SB), R4", lut).Raw("VL (R4), V24").
-		Raw("CMPBEQ R3, $0, done").
-		Label("loop").
-		Raw("VL (R2), V0").
-		Raw("VPERM V0, V0, V16, V0").
-		Raw("VESRLF $2, V0, V1").Raw("VN V1, V17, V1").
-		Raw("VESRLF $4, V0, V2").Raw("VN V2, V18, V2").
-		Raw("VO V2, V1, V1").
-		Raw("VESRLF $6, V0, V2").Raw("VN V2, V19, V2").
-		Raw("VO V2, V1, V1").
-		Raw("VESRLF $8, V0, V2").Raw("VN V2, V20, V2").
-		Raw("VO V2, V1, V1").
-		Raw("VMNLB V1, V21, V2").
-		Raw("VSB V2, V1, V2").
-		Raw("VCHLB V1, V22, V3").
-		Raw("VN V3, V23, V3").
-		Raw("VAB V2, V3, V2").
-		Raw("VPERM V24, V24, V2, V2").
-		Raw("VAB V1, V2, V2").
-		Raw("VST V2, (R1)").
-		Raw("ADD $12, R2").
-		Raw("ADD $16, R1").
-		Raw("ADD $-1, R3").
-		Raw("CMPBNE R3, $0, loop").
-		Label("done").
-		Ret()
-	f.Add(g.Func())
+	for _, vr := range []struct {
+		suffix string
+		lutB   []byte
+	}{{"", lutStd}, {"URL", lutURL}} {
+		lut := f.Data("s390Lut"+vr.suffix, vr.lutB)
+		g := s390x.NewFunc("encodeBlocks"+vr.suffix, sig, 0)
+		g.LoadArg("dst_base", "R1").
+			LoadArg("src_base", "R2").
+			LoadArg("n", "R3").
+			Raw("MOVD $%s(SB), R4", shuf).Raw("VL (R4), V16").
+			Raw("MOVD $%s(SB), R4", m0).Raw("VL (R4), V17").
+			Raw("MOVD $%s(SB), R4", m1).Raw("VL (R4), V18").
+			Raw("MOVD $%s(SB), R4", m2).Raw("VL (R4), V19").
+			Raw("MOVD $%s(SB), R4", m3).Raw("VL (R4), V20").
+			Raw("MOVD $%s(SB), R4", c51).Raw("VL (R4), V21").
+			Raw("MOVD $%s(SB), R4", c25).Raw("VL (R4), V22").
+			Raw("MOVD $%s(SB), R4", c1).Raw("VL (R4), V23").
+			Raw("MOVD $%s(SB), R4", lut).Raw("VL (R4), V24").
+			Raw("CMPBEQ R3, $0, done").
+			Label("loop").
+			Raw("VL (R2), V0").
+			Raw("VPERM V0, V0, V16, V0").
+			Raw("VESRLF $2, V0, V1").Raw("VN V1, V17, V1").
+			Raw("VESRLF $4, V0, V2").Raw("VN V2, V18, V2").
+			Raw("VO V2, V1, V1").
+			Raw("VESRLF $6, V0, V2").Raw("VN V2, V19, V2").
+			Raw("VO V2, V1, V1").
+			Raw("VESRLF $8, V0, V2").Raw("VN V2, V20, V2").
+			Raw("VO V2, V1, V1").
+			Raw("VMNLB V1, V21, V2").
+			Raw("VSB V2, V1, V2").
+			Raw("VCHLB V1, V22, V3").
+			Raw("VN V3, V23, V3").
+			Raw("VAB V2, V3, V2").
+			Raw("VPERM V24, V24, V2, V2").
+			Raw("VAB V1, V2, V2").
+			Raw("VST V2, (R1)").
+			Raw("ADD $12, R2").
+			Raw("ADD $16, R1").
+			Raw("ADD $-1, R3").
+			Raw("CMPBNE R3, $0, loop").
+			Label("done").
+			Ret()
+		f.Add(g.Func())
+	}
 
 	if err := os.WriteFile("encode_s390x.s", []byte(f.String()), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)

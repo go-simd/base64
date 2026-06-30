@@ -10,7 +10,9 @@ package base64
 // go-asmgen (decode_ppc64x_gen.go), in decode_ppc64x.s. It emits ISA-3.0 (POWER9)
 // instructions (LXVB16X/STXVB16X) that SIGILL on POWER8, so callers must gate it
 // behind hasVSX (cpu.PPC64.IsPOWER9; declared in encode_ppc64le.go).
+// decodeBlocksURL is the identical kernel with the -_ alphabet's translate LUTs.
 func decodeBlocks(dst, src []byte, n int) int
+func decodeBlocksURL(dst, src []byte, n int) int
 
 // decodeSIMD decodes the clean leading blocks of src and reports bytes
 // consumed/written so the caller finishes the tail (the padded final quantum, or
@@ -20,13 +22,19 @@ func decodeBlocks(dst, src []byte, n int) int
 // (where StdEncoding padding also lives) so the final group's over-store stays in
 // the room the scalar tail decode needs.
 // On a pre-POWER9 CPU it reports no progress so the whole input goes to the stdlib.
-func decodeSIMD(dst, src []byte) (srcDone, dstDone int) {
+// url selects the -_ (URL/RawURL) alphabet kernel over the +/ one.
+func decodeSIMD(dst, src []byte, url bool) (srcDone, dstDone int) {
 	n := len(src)
 	if !hasVSX || n < 16+8 {
 		return 0, 0
 	}
 	usable := n - 8
 	groups := usable / 16
-	got := decodeBlocks(dst, src, groups)
+	var got int
+	if url {
+		got = decodeBlocksURL(dst, src, groups)
+	} else {
+		got = decodeBlocks(dst, src, groups)
+	}
 	return got * 16, got * 12
 }

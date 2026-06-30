@@ -65,6 +65,67 @@ loop:
 done:
 	RET
 
+TEXT ·encodeBlocksURL(SB), NOSPLIT, $0-56
+	MOVD dst_base+0(FP), R3
+	MOVD src_base+24(FP), R4
+	MOVD n+48(FP), R5
+	MOVD $ppcShuf<>(SB), R6
+	LXVB16X (R6)(R0), VS39
+	MOVD $ppcM0<>(SB), R6
+	LXVB16X (R6)(R0), VS40
+	MOVD $ppcM1<>(SB), R6
+	LXVB16X (R6)(R0), VS41
+	MOVD $ppcM2<>(SB), R6
+	LXVB16X (R6)(R0), VS42
+	MOVD $ppcM3<>(SB), R6
+	LXVB16X (R6)(R0), VS43
+	MOVD $ppcLutURL<>(SB), R6
+	LXVB16X (R6)(R0), VS44
+	MOVD $ppcS2<>(SB), R6
+	LXVB16X (R6)(R0), VS45
+	MOVD $ppcS4<>(SB), R6
+	LXVB16X (R6)(R0), VS46
+	MOVD $ppcS6<>(SB), R6
+	LXVB16X (R6)(R0), VS47
+	MOVD $ppcS8<>(SB), R6
+	LXVB16X (R6)(R0), VS48
+	MOVD $ppcC51<>(SB), R6
+	LXVB16X (R6)(R0), VS49
+	MOVD $ppcC25<>(SB), R6
+	LXVB16X (R6)(R0), VS50
+	MOVD $ppcC1<>(SB), R6
+	LXVB16X (R6)(R0), VS51
+	CMP R5, $0
+	BEQ done
+loop:
+	LXVB16X (R4)(R0), VS32
+	VPERM V0, V0, V7, V0
+	VSRW V0, V13, V1
+	VAND V1, V8, V1
+	VSRW V0, V14, V2
+	VAND V2, V9, V2
+	VOR V2, V1, V1
+	VSRW V0, V15, V2
+	VAND V2, V10, V2
+	VOR V2, V1, V1
+	VSRW V0, V16, V2
+	VAND V2, V11, V2
+	VOR V2, V1, V1
+	VSUBUBS V1, V17, V2
+	VCMPGTUB V1, V18, V3
+	VAND V3, V19, V3
+	VADDUBM V2, V3, V2
+	VPERM V12, V12, V2, V2
+	VADDUBM V1, V2, V2
+	STXVB16X VS34, (R3)(R0)
+	ADD $12, R4
+	ADD $16, R3
+	ADD $-1, R5
+	CMP R5, $0
+	BNE loop
+done:
+	RET
+
 DATA ppcShuf<>+0(SB)/1, $0x00
 DATA ppcShuf<>+1(SB)/1, $0x01
 DATA ppcShuf<>+2(SB)/1, $0x02
@@ -298,4 +359,22 @@ DATA ppcLut<>+13(SB)/1, $0xf0
 DATA ppcLut<>+14(SB)/1, $0x00
 DATA ppcLut<>+15(SB)/1, $0x00
 GLOBL ppcLut<>(SB), RODATA|NOPTR, $16
+
+DATA ppcLutURL<>+0(SB)/1, $0x41
+DATA ppcLutURL<>+1(SB)/1, $0x47
+DATA ppcLutURL<>+2(SB)/1, $0xfc
+DATA ppcLutURL<>+3(SB)/1, $0xfc
+DATA ppcLutURL<>+4(SB)/1, $0xfc
+DATA ppcLutURL<>+5(SB)/1, $0xfc
+DATA ppcLutURL<>+6(SB)/1, $0xfc
+DATA ppcLutURL<>+7(SB)/1, $0xfc
+DATA ppcLutURL<>+8(SB)/1, $0xfc
+DATA ppcLutURL<>+9(SB)/1, $0xfc
+DATA ppcLutURL<>+10(SB)/1, $0xfc
+DATA ppcLutURL<>+11(SB)/1, $0xfc
+DATA ppcLutURL<>+12(SB)/1, $0xef
+DATA ppcLutURL<>+13(SB)/1, $0x20
+DATA ppcLutURL<>+14(SB)/1, $0x00
+DATA ppcLutURL<>+15(SB)/1, $0x00
+GLOBL ppcLutURL<>(SB), RODATA|NOPTR, $16
 

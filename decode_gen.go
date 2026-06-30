@@ -39,11 +39,22 @@ func rep(v []byte, times int) []byte {
 }
 
 var (
-	// Translate/validate nibble LUTs (Muła). Stored as raw bytes (two's-complement
-	// for the negative roll entries).
+	// Translate/validate nibble LUTs (Muła) for the StdEncoding (+/) alphabet,
+	// stored as raw bytes (two's-complement for the negative roll entries). A char
+	// is valid iff (lutLo[lo]&lutHi[hi])==0; its 6-bit value is char +
+	// lutRoll[hiNibble + (char==special ? K : 0)], where for Std special='/'(0x2f)
+	// and K=0xFF (i.e. delta -1, landing '/' in the empty hi-nibble-1 slot).
 	lutLoBytes   = []byte{0x15, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x13, 0x1A, 0x1B, 0x1B, 0x1B, 0x1A}
 	lutHiBytes   = []byte{0x10, 0x10, 0x01, 0x02, 0x04, 0x08, 0x04, 0x08, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10}
 	lutRollBytes = []byte{0, 16, 19, 4, 0xBF, 0xBF, 0xB9, 0xB9, 0, 0, 0, 0, 0, 0, 0, 0} // -65=0xBF, -71=0xB9
+	// URL/RawURL (-_) translate/validate LUTs, derived by an exhaustive biclique
+	// cover over the alphabet and self-verified against every byte 0x00..0xFF (see
+	// the genVariant verify step). The URL special char '_'(0x5f) sits in a
+	// non-empty neighbour nibble, so the simple delta -1 of Std collides; URL uses
+	// K=0xFB (delta -5) so '_'s roll lands in the empty hi-nibble-0 slot.
+	lutLoURLBytes   = []byte{0x23, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x07, 0x1F, 0x1F, 0x1D, 0x1F, 0x0F}
+	lutHiURLBytes   = []byte{0x01, 0x01, 0x02, 0x04, 0x20, 0x10, 0x20, 0x08, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
+	lutRollURLBytes = []byte{0xE0, 0, 0x11, 4, 0xBF, 0xBF, 0xB9, 0xB9, 0, 0, 0, 0, 0, 0, 0, 0}
 	// maddubs multiplier: per byte pair (a,b) -> a*0x40 + b*1, so the first 6-bit
 	// value lands in the high bits. PMADDUBSW multiplies the (unsigned) data byte by
 	// the (signed) multiplier byte position-for-position, so the pattern is
@@ -79,23 +90,58 @@ func sig() abi.Signature {
 	)
 }
 
+// variant binds an alphabet's translate/validate LUTs, the special roll char and
+// the roll-index mask K (delta = 0xFF&K applied where char==special) to a
+// func-name suffix. Std uses the empty suffix and K=0xFF (delta -1, the original
+// kernel); URL appends "URL" and K=0xFB (delta -5).
+type variant struct {
+	suffix                string
+	lutLo, lutHi, lutRoll []byte
+	special               byte
+	k                     byte
+}
+
+var variants = []variant{
+	{"", lutLoBytes, lutHiBytes, lutRollBytes, 0x2f, 0xFF},
+	{"URL", lutLoURLBytes, lutHiURLBytes, lutRollURLBytes, 0x5f, 0xFB},
+}
+
 func main() {
 	f := emit.NewFile("amd64")
 
-	lutLo := f.Data("dlutLo", rep(lutLoBytes, 2))
-	lutHi := f.Data("dlutHi", rep(lutHiBytes, 2))
-	lutRoll := f.Data("dlutRoll", rep(lutRollBytes, 2))
+	// Alphabet-independent constants, shared across both variants.
 	mul1 := f.Data("dmul1", rep(maddubsBytes, 16)) // 32 bytes
 	mul2 := f.Data("dmul2", rep(maddwdWords, 8))   // 32 bytes
 	pshuf := f.Data("dpshuf", rep(packShuf, 2))
 	c0f := f.Data("dc0f", rep([]byte{0x0f}, 32))
-	c2f := f.Data("dc2f", rep([]byte{0x2f}, 32))
 	permd := f.Data("dpermd", permdBytes())
+
+	for _, vr := range variants {
+		genVariant(f, vr, mul1, mul2, pshuf, c0f, permd)
+	}
+
+	if err := os.WriteFile("decode_amd64.s", []byte(f.String()), 0o644); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Println("wrote decode_amd64.s")
+}
+
+func genVariant(f *emit.File, vr variant, mul1, mul2, pshuf, c0f, permd string) {
+	lutLo := f.Data("dlutLo"+vr.suffix, rep(vr.lutLo, 2))
+	lutHi := f.Data("dlutHi"+vr.suffix, rep(vr.lutHi, 2))
+	lutRoll := f.Data("dlutRoll"+vr.suffix, rep(vr.lutRoll, 2))
+	ceq := f.Data("dceq"+vr.suffix, rep([]byte{vr.special}, 32)) // special-char splat
+	urlSafe := vr.suffix == "URL"
+	var ck string
+	if urlSafe {
+		ck = f.Data("dck"+vr.suffix, rep([]byte{vr.k}, 32)) // roll-index mask K
+	}
 
 	// ---- SSSE3: 16 chars -> 12 bytes ----
 	// Registers: X8=lutLo X9=lutHi X10=lutRoll X11=mul1 X12=mul2 X13=pshuf
-	//            X14=0x0f mask  X15=0x2f
-	s := amd64.NewFunc("decodeBlocksSSE", sig(), 0)
+	//            X14=0x0f mask  X15=special-char splat. (URL loads K from memory.)
+	s := amd64.NewFunc("decodeBlocksSSE"+vr.suffix, sig(), 0)
 	s.LoadArg("dst_base", "DI").LoadArg("src_base", "SI").LoadArg("n", "CX").
 		Raw("MOVOU %s+0(SB), X8", lutLo).
 		Raw("MOVOU %s+0(SB), X9", lutHi).
@@ -104,7 +150,7 @@ func main() {
 		Raw("MOVOU %s+0(SB), X12", mul2).
 		Raw("MOVOU %s+0(SB), X13", pshuf).
 		Raw("MOVOU %s+0(SB), X14", c0f).
-		Raw("MOVOU %s+0(SB), X15", c2f).
+		Raw("MOVOU %s+0(SB), X15", ceq).
 		Raw("XORQ AX, AX"). // group counter / return value
 		Raw("TESTQ CX, CX").Raw("JZ sdone").
 		Label("sloop").
@@ -120,11 +166,15 @@ func main() {
 		// (the error bytes are not guaranteed to have bit 7 set, so PMOVMSKB would
 		// miss them — PTEST tests all bits).
 		Raw("PTEST X3, X4").Raw("JNZ sdone").
-		// roll index = hiNibble + (char==0x2f ? -1 : 0).
-		Raw("MOVO X0, X6").Raw("PCMPEQB X15, X6"). // X6 = 0xff where char=='/'
-		Raw("PADDB X1, X6").                       // X6 = hiNibble + eq2f(-1 as 0xff)
-		Raw("MOVO X10, X7").Raw("PSHUFB X6, X7").  // X7 = roll
-		Raw("PADDB X7, X0").                       // X0 = 6-bit values
+		// roll index = hiNibble + ((char==special) ? delta : 0). The eq-mask is
+		// 0x00/0xFF; Std's delta is that mask (-1); URL ANDs it with K to get -5.
+		Raw("MOVO X0, X6").Raw("PCMPEQB X15, X6") // X6 = 0xff where char==special
+	if urlSafe {
+		s.Raw("PAND %s+0(SB), X6", ck) // X6 = 0x00 or (0xFF&K) = delta
+	}
+	s.Raw("PADDB X1, X6"). // X6 = hiNibble + delta
+				Raw("MOVO X10, X7").Raw("PSHUFB X6, X7"). // X7 = roll
+				Raw("PADDB X7, X0").                      // X0 = 6-bit values
 		// pack: maddubs then madd.
 		Raw("PMADDUBSW X11, X0").
 		Raw("PMADDWL X12, X0"). // Go asm name for SSE PMADDWD (0F F5)
@@ -137,10 +187,10 @@ func main() {
 
 	// ---- AVX2: 32 chars -> 24 bytes ----
 	// Y8=lutLo Y9=lutHi Y10=lutRoll Y11=mul1 Y12=mul2 Y13=pshuf Y14=0x0f
-	// Y15=VPERMD cross-lane dword control. 0x2f is loaded from memory per iteration
-	// (used once) to free a register for the permute control under AVX2 (only Y0-Y15
-	// exist without AVX512).
-	v := amd64.NewFunc("decodeBlocksAVX2", sig(), 0)
+	// Y15=VPERMD cross-lane dword control. The special char (and, for URL, K) is
+	// loaded from memory per iteration (used once) to free a register for the
+	// permute control under AVX2 (only Y0-Y15 exist without AVX512).
+	v := amd64.NewFunc("decodeBlocksAVX2"+vr.suffix, sig(), 0)
 	v.LoadArg("dst_base", "DI").LoadArg("src_base", "SI").LoadArg("n", "CX").
 		Raw("VMOVDQU %s+0(SB), Y8", lutLo).
 		Raw("VMOVDQU %s+0(SB), Y9", lutHi).
@@ -162,12 +212,16 @@ func main() {
 		// ZF = ((Y4 & Y3) == 0); JNZ bails on any set bit (error bytes are not
 		// guaranteed to have bit 7 set, so VPMOVMSKB would miss them).
 		Raw("VPTEST Y3, Y4").Raw("JNZ vdone").
-		Raw("VPCMPEQB %s+0(SB), Y0, Y6", c2f).Raw("VPADDB Y1, Y6, Y6"). // roll index
-		Raw("VPSHUFB Y6, Y10, Y7").                                     // roll
-		Raw("VPADDB Y7, Y0, Y0").                                       // 6-bit values
-		Raw("VPMADDUBSW Y11, Y0, Y0").
-		Raw("VPMADDWD Y12, Y0, Y0").
-		Raw("VPSHUFB Y13, Y0, Y0"). // compact within each 128-bit lane: low 12 of each
+		Raw("VPCMPEQB %s+0(SB), Y0, Y6", ceq) // Y6 = 0xff where char==special
+	if urlSafe {
+		v.Raw("VPAND %s+0(SB), Y6, Y6", ck) // Y6 = delta (0 or 0xFF&K)
+	}
+	v.Raw("VPADDB Y1, Y6, Y6"). // roll index = hiNibble + delta
+					Raw("VPSHUFB Y6, Y10, Y7"). // roll
+					Raw("VPADDB Y7, Y0, Y0").   // 6-bit values
+					Raw("VPMADDUBSW Y11, Y0, Y0").
+					Raw("VPMADDWD Y12, Y0, Y0").
+					Raw("VPSHUFB Y13, Y0, Y0"). // compact within each 128-bit lane: low 12 of each
 		// lane0's 12 valid bytes are in dwords 0..2, lane1's in dwords 4..6; VPERMD
 		// pulls them together into output dwords 0..5 (24 contiguous bytes).
 		Raw("VPERMD Y0, Y15, Y0").
@@ -176,10 +230,4 @@ func main() {
 		Raw("DECQ CX").Raw("JNZ vloop").
 		Label("vdone").Raw("MOVQ AX, ret+56(FP)").Raw("VZEROUPPER").Ret()
 	f.Add(v.Func())
-
-	if err := os.WriteFile("decode_amd64.s", []byte(f.String()), 0o644); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	fmt.Println("wrote decode_amd64.s")
 }

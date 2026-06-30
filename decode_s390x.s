@@ -24,7 +24,7 @@ TEXT ·decodeBlocks(SB), NOSPLIT, $0-64
 	VL (R4), V22
 	MOVD $ds390C0f<>(SB), R4
 	VL (R4), V23
-	MOVD $ds390C2f<>(SB), R4
+	MOVD $ds390Ceq<>(SB), R4
 	VL (R4), V24
 	MOVD $ds390Pshuf<>(SB), R4
 	VL (R4), V25
@@ -65,59 +65,69 @@ done:
 	MOVD R5, ret+56(FP)
 	RET
 
-DATA ds390LutLo<>+0(SB)/1, $0x15
-DATA ds390LutLo<>+1(SB)/1, $0x11
-DATA ds390LutLo<>+2(SB)/1, $0x11
-DATA ds390LutLo<>+3(SB)/1, $0x11
-DATA ds390LutLo<>+4(SB)/1, $0x11
-DATA ds390LutLo<>+5(SB)/1, $0x11
-DATA ds390LutLo<>+6(SB)/1, $0x11
-DATA ds390LutLo<>+7(SB)/1, $0x11
-DATA ds390LutLo<>+8(SB)/1, $0x11
-DATA ds390LutLo<>+9(SB)/1, $0x11
-DATA ds390LutLo<>+10(SB)/1, $0x13
-DATA ds390LutLo<>+11(SB)/1, $0x1a
-DATA ds390LutLo<>+12(SB)/1, $0x1b
-DATA ds390LutLo<>+13(SB)/1, $0x1b
-DATA ds390LutLo<>+14(SB)/1, $0x1b
-DATA ds390LutLo<>+15(SB)/1, $0x1a
-GLOBL ds390LutLo<>(SB), RODATA|NOPTR, $16
-
-DATA ds390LutHi<>+0(SB)/1, $0x10
-DATA ds390LutHi<>+1(SB)/1, $0x10
-DATA ds390LutHi<>+2(SB)/1, $0x01
-DATA ds390LutHi<>+3(SB)/1, $0x02
-DATA ds390LutHi<>+4(SB)/1, $0x04
-DATA ds390LutHi<>+5(SB)/1, $0x08
-DATA ds390LutHi<>+6(SB)/1, $0x04
-DATA ds390LutHi<>+7(SB)/1, $0x08
-DATA ds390LutHi<>+8(SB)/1, $0x10
-DATA ds390LutHi<>+9(SB)/1, $0x10
-DATA ds390LutHi<>+10(SB)/1, $0x10
-DATA ds390LutHi<>+11(SB)/1, $0x10
-DATA ds390LutHi<>+12(SB)/1, $0x10
-DATA ds390LutHi<>+13(SB)/1, $0x10
-DATA ds390LutHi<>+14(SB)/1, $0x10
-DATA ds390LutHi<>+15(SB)/1, $0x10
-GLOBL ds390LutHi<>(SB), RODATA|NOPTR, $16
-
-DATA ds390LutRoll<>+0(SB)/1, $0x00
-DATA ds390LutRoll<>+1(SB)/1, $0x10
-DATA ds390LutRoll<>+2(SB)/1, $0x13
-DATA ds390LutRoll<>+3(SB)/1, $0x04
-DATA ds390LutRoll<>+4(SB)/1, $0xbf
-DATA ds390LutRoll<>+5(SB)/1, $0xbf
-DATA ds390LutRoll<>+6(SB)/1, $0xb9
-DATA ds390LutRoll<>+7(SB)/1, $0xb9
-DATA ds390LutRoll<>+8(SB)/1, $0x00
-DATA ds390LutRoll<>+9(SB)/1, $0x00
-DATA ds390LutRoll<>+10(SB)/1, $0x00
-DATA ds390LutRoll<>+11(SB)/1, $0x00
-DATA ds390LutRoll<>+12(SB)/1, $0x00
-DATA ds390LutRoll<>+13(SB)/1, $0x00
-DATA ds390LutRoll<>+14(SB)/1, $0x00
-DATA ds390LutRoll<>+15(SB)/1, $0x00
-GLOBL ds390LutRoll<>(SB), RODATA|NOPTR, $16
+TEXT ·decodeBlocksURL(SB), NOSPLIT, $0-64
+	MOVD dst_base+0(FP), R1
+	MOVD src_base+24(FP), R2
+	MOVD n+48(FP), R3
+	MOVD $ds390LutLoURL<>(SB), R4
+	VL (R4), V16
+	MOVD $ds390LutHiURL<>(SB), R4
+	VL (R4), V17
+	MOVD $ds390LutRollURL<>(SB), R4
+	VL (R4), V18
+	MOVD $ds390M0<>(SB), R4
+	VL (R4), V19
+	MOVD $ds390M1<>(SB), R4
+	VL (R4), V20
+	MOVD $ds390M2<>(SB), R4
+	VL (R4), V21
+	MOVD $ds390M3<>(SB), R4
+	VL (R4), V22
+	MOVD $ds390C0f<>(SB), R4
+	VL (R4), V23
+	MOVD $ds390CeqURL<>(SB), R4
+	VL (R4), V24
+	MOVD $ds390Pshuf<>(SB), R4
+	VL (R4), V25
+	VZERO V26
+	MOVD $0, R5
+	CMPBEQ R3, $0, done
+loop:
+	VL (R2), V0
+	VN V0, V23, V1
+	VESRLB $4, V0, V2
+	VPERM V16, V16, V1, V3
+	VPERM V17, V17, V2, V4
+	VN V3, V4, V5
+	VCEQBS V5, V26, V6
+	BNE done
+	VCEQB V0, V24, V6
+	MOVD $ds390CkURL<>(SB), R4
+	VL (R4), V27
+	VN V6, V27, V6
+	VAB V2, V6, V6
+	VPERM V18, V18, V6, V6
+	VAB V0, V6, V0
+	VESRLF $6, V0, V1
+	VN V1, V19, V1
+	VESRLF $4, V0, V2
+	VN V2, V20, V2
+	VO V2, V1, V1
+	VESRLF $2, V0, V2
+	VN V2, V21, V2
+	VO V2, V1, V1
+	VN V0, V22, V2
+	VO V2, V1, V1
+	VPERM V1, V1, V25, V1
+	VST V1, (R1)
+	ADD $16, R2
+	ADD $12, R1
+	ADD $1, R5
+	ADD $-1, R3
+	CMPBNE R3, $0, loop
+done:
+	MOVD R5, ret+56(FP)
+	RET
 
 DATA ds390M0<>+0(SB)/1, $0x00
 DATA ds390M0<>+1(SB)/1, $0xfc
@@ -209,24 +219,6 @@ DATA ds390C0f<>+14(SB)/1, $0x0f
 DATA ds390C0f<>+15(SB)/1, $0x0f
 GLOBL ds390C0f<>(SB), RODATA|NOPTR, $16
 
-DATA ds390C2f<>+0(SB)/1, $0x2f
-DATA ds390C2f<>+1(SB)/1, $0x2f
-DATA ds390C2f<>+2(SB)/1, $0x2f
-DATA ds390C2f<>+3(SB)/1, $0x2f
-DATA ds390C2f<>+4(SB)/1, $0x2f
-DATA ds390C2f<>+5(SB)/1, $0x2f
-DATA ds390C2f<>+6(SB)/1, $0x2f
-DATA ds390C2f<>+7(SB)/1, $0x2f
-DATA ds390C2f<>+8(SB)/1, $0x2f
-DATA ds390C2f<>+9(SB)/1, $0x2f
-DATA ds390C2f<>+10(SB)/1, $0x2f
-DATA ds390C2f<>+11(SB)/1, $0x2f
-DATA ds390C2f<>+12(SB)/1, $0x2f
-DATA ds390C2f<>+13(SB)/1, $0x2f
-DATA ds390C2f<>+14(SB)/1, $0x2f
-DATA ds390C2f<>+15(SB)/1, $0x2f
-GLOBL ds390C2f<>(SB), RODATA|NOPTR, $16
-
 DATA ds390Pshuf<>+0(SB)/1, $0x01
 DATA ds390Pshuf<>+1(SB)/1, $0x02
 DATA ds390Pshuf<>+2(SB)/1, $0x03
@@ -244,4 +236,166 @@ DATA ds390Pshuf<>+13(SB)/1, $0x00
 DATA ds390Pshuf<>+14(SB)/1, $0x00
 DATA ds390Pshuf<>+15(SB)/1, $0x00
 GLOBL ds390Pshuf<>(SB), RODATA|NOPTR, $16
+
+DATA ds390LutLo<>+0(SB)/1, $0x15
+DATA ds390LutLo<>+1(SB)/1, $0x11
+DATA ds390LutLo<>+2(SB)/1, $0x11
+DATA ds390LutLo<>+3(SB)/1, $0x11
+DATA ds390LutLo<>+4(SB)/1, $0x11
+DATA ds390LutLo<>+5(SB)/1, $0x11
+DATA ds390LutLo<>+6(SB)/1, $0x11
+DATA ds390LutLo<>+7(SB)/1, $0x11
+DATA ds390LutLo<>+8(SB)/1, $0x11
+DATA ds390LutLo<>+9(SB)/1, $0x11
+DATA ds390LutLo<>+10(SB)/1, $0x13
+DATA ds390LutLo<>+11(SB)/1, $0x1a
+DATA ds390LutLo<>+12(SB)/1, $0x1b
+DATA ds390LutLo<>+13(SB)/1, $0x1b
+DATA ds390LutLo<>+14(SB)/1, $0x1b
+DATA ds390LutLo<>+15(SB)/1, $0x1a
+GLOBL ds390LutLo<>(SB), RODATA|NOPTR, $16
+
+DATA ds390LutHi<>+0(SB)/1, $0x10
+DATA ds390LutHi<>+1(SB)/1, $0x10
+DATA ds390LutHi<>+2(SB)/1, $0x01
+DATA ds390LutHi<>+3(SB)/1, $0x02
+DATA ds390LutHi<>+4(SB)/1, $0x04
+DATA ds390LutHi<>+5(SB)/1, $0x08
+DATA ds390LutHi<>+6(SB)/1, $0x04
+DATA ds390LutHi<>+7(SB)/1, $0x08
+DATA ds390LutHi<>+8(SB)/1, $0x10
+DATA ds390LutHi<>+9(SB)/1, $0x10
+DATA ds390LutHi<>+10(SB)/1, $0x10
+DATA ds390LutHi<>+11(SB)/1, $0x10
+DATA ds390LutHi<>+12(SB)/1, $0x10
+DATA ds390LutHi<>+13(SB)/1, $0x10
+DATA ds390LutHi<>+14(SB)/1, $0x10
+DATA ds390LutHi<>+15(SB)/1, $0x10
+GLOBL ds390LutHi<>(SB), RODATA|NOPTR, $16
+
+DATA ds390LutRoll<>+0(SB)/1, $0x00
+DATA ds390LutRoll<>+1(SB)/1, $0x10
+DATA ds390LutRoll<>+2(SB)/1, $0x13
+DATA ds390LutRoll<>+3(SB)/1, $0x04
+DATA ds390LutRoll<>+4(SB)/1, $0xbf
+DATA ds390LutRoll<>+5(SB)/1, $0xbf
+DATA ds390LutRoll<>+6(SB)/1, $0xb9
+DATA ds390LutRoll<>+7(SB)/1, $0xb9
+DATA ds390LutRoll<>+8(SB)/1, $0x00
+DATA ds390LutRoll<>+9(SB)/1, $0x00
+DATA ds390LutRoll<>+10(SB)/1, $0x00
+DATA ds390LutRoll<>+11(SB)/1, $0x00
+DATA ds390LutRoll<>+12(SB)/1, $0x00
+DATA ds390LutRoll<>+13(SB)/1, $0x00
+DATA ds390LutRoll<>+14(SB)/1, $0x00
+DATA ds390LutRoll<>+15(SB)/1, $0x00
+GLOBL ds390LutRoll<>(SB), RODATA|NOPTR, $16
+
+DATA ds390Ceq<>+0(SB)/1, $0x2f
+DATA ds390Ceq<>+1(SB)/1, $0x2f
+DATA ds390Ceq<>+2(SB)/1, $0x2f
+DATA ds390Ceq<>+3(SB)/1, $0x2f
+DATA ds390Ceq<>+4(SB)/1, $0x2f
+DATA ds390Ceq<>+5(SB)/1, $0x2f
+DATA ds390Ceq<>+6(SB)/1, $0x2f
+DATA ds390Ceq<>+7(SB)/1, $0x2f
+DATA ds390Ceq<>+8(SB)/1, $0x2f
+DATA ds390Ceq<>+9(SB)/1, $0x2f
+DATA ds390Ceq<>+10(SB)/1, $0x2f
+DATA ds390Ceq<>+11(SB)/1, $0x2f
+DATA ds390Ceq<>+12(SB)/1, $0x2f
+DATA ds390Ceq<>+13(SB)/1, $0x2f
+DATA ds390Ceq<>+14(SB)/1, $0x2f
+DATA ds390Ceq<>+15(SB)/1, $0x2f
+GLOBL ds390Ceq<>(SB), RODATA|NOPTR, $16
+
+DATA ds390LutLoURL<>+0(SB)/1, $0x23
+DATA ds390LutLoURL<>+1(SB)/1, $0x03
+DATA ds390LutLoURL<>+2(SB)/1, $0x03
+DATA ds390LutLoURL<>+3(SB)/1, $0x03
+DATA ds390LutLoURL<>+4(SB)/1, $0x03
+DATA ds390LutLoURL<>+5(SB)/1, $0x03
+DATA ds390LutLoURL<>+6(SB)/1, $0x03
+DATA ds390LutLoURL<>+7(SB)/1, $0x03
+DATA ds390LutLoURL<>+8(SB)/1, $0x03
+DATA ds390LutLoURL<>+9(SB)/1, $0x03
+DATA ds390LutLoURL<>+10(SB)/1, $0x07
+DATA ds390LutLoURL<>+11(SB)/1, $0x1f
+DATA ds390LutLoURL<>+12(SB)/1, $0x1f
+DATA ds390LutLoURL<>+13(SB)/1, $0x1d
+DATA ds390LutLoURL<>+14(SB)/1, $0x1f
+DATA ds390LutLoURL<>+15(SB)/1, $0x0f
+GLOBL ds390LutLoURL<>(SB), RODATA|NOPTR, $16
+
+DATA ds390LutHiURL<>+0(SB)/1, $0x01
+DATA ds390LutHiURL<>+1(SB)/1, $0x01
+DATA ds390LutHiURL<>+2(SB)/1, $0x02
+DATA ds390LutHiURL<>+3(SB)/1, $0x04
+DATA ds390LutHiURL<>+4(SB)/1, $0x20
+DATA ds390LutHiURL<>+5(SB)/1, $0x10
+DATA ds390LutHiURL<>+6(SB)/1, $0x20
+DATA ds390LutHiURL<>+7(SB)/1, $0x08
+DATA ds390LutHiURL<>+8(SB)/1, $0x01
+DATA ds390LutHiURL<>+9(SB)/1, $0x01
+DATA ds390LutHiURL<>+10(SB)/1, $0x01
+DATA ds390LutHiURL<>+11(SB)/1, $0x01
+DATA ds390LutHiURL<>+12(SB)/1, $0x01
+DATA ds390LutHiURL<>+13(SB)/1, $0x01
+DATA ds390LutHiURL<>+14(SB)/1, $0x01
+DATA ds390LutHiURL<>+15(SB)/1, $0x01
+GLOBL ds390LutHiURL<>(SB), RODATA|NOPTR, $16
+
+DATA ds390LutRollURL<>+0(SB)/1, $0xe0
+DATA ds390LutRollURL<>+1(SB)/1, $0x00
+DATA ds390LutRollURL<>+2(SB)/1, $0x11
+DATA ds390LutRollURL<>+3(SB)/1, $0x04
+DATA ds390LutRollURL<>+4(SB)/1, $0xbf
+DATA ds390LutRollURL<>+5(SB)/1, $0xbf
+DATA ds390LutRollURL<>+6(SB)/1, $0xb9
+DATA ds390LutRollURL<>+7(SB)/1, $0xb9
+DATA ds390LutRollURL<>+8(SB)/1, $0x00
+DATA ds390LutRollURL<>+9(SB)/1, $0x00
+DATA ds390LutRollURL<>+10(SB)/1, $0x00
+DATA ds390LutRollURL<>+11(SB)/1, $0x00
+DATA ds390LutRollURL<>+12(SB)/1, $0x00
+DATA ds390LutRollURL<>+13(SB)/1, $0x00
+DATA ds390LutRollURL<>+14(SB)/1, $0x00
+DATA ds390LutRollURL<>+15(SB)/1, $0x00
+GLOBL ds390LutRollURL<>(SB), RODATA|NOPTR, $16
+
+DATA ds390CeqURL<>+0(SB)/1, $0x5f
+DATA ds390CeqURL<>+1(SB)/1, $0x5f
+DATA ds390CeqURL<>+2(SB)/1, $0x5f
+DATA ds390CeqURL<>+3(SB)/1, $0x5f
+DATA ds390CeqURL<>+4(SB)/1, $0x5f
+DATA ds390CeqURL<>+5(SB)/1, $0x5f
+DATA ds390CeqURL<>+6(SB)/1, $0x5f
+DATA ds390CeqURL<>+7(SB)/1, $0x5f
+DATA ds390CeqURL<>+8(SB)/1, $0x5f
+DATA ds390CeqURL<>+9(SB)/1, $0x5f
+DATA ds390CeqURL<>+10(SB)/1, $0x5f
+DATA ds390CeqURL<>+11(SB)/1, $0x5f
+DATA ds390CeqURL<>+12(SB)/1, $0x5f
+DATA ds390CeqURL<>+13(SB)/1, $0x5f
+DATA ds390CeqURL<>+14(SB)/1, $0x5f
+DATA ds390CeqURL<>+15(SB)/1, $0x5f
+GLOBL ds390CeqURL<>(SB), RODATA|NOPTR, $16
+
+DATA ds390CkURL<>+0(SB)/1, $0xfb
+DATA ds390CkURL<>+1(SB)/1, $0xfb
+DATA ds390CkURL<>+2(SB)/1, $0xfb
+DATA ds390CkURL<>+3(SB)/1, $0xfb
+DATA ds390CkURL<>+4(SB)/1, $0xfb
+DATA ds390CkURL<>+5(SB)/1, $0xfb
+DATA ds390CkURL<>+6(SB)/1, $0xfb
+DATA ds390CkURL<>+7(SB)/1, $0xfb
+DATA ds390CkURL<>+8(SB)/1, $0xfb
+DATA ds390CkURL<>+9(SB)/1, $0xfb
+DATA ds390CkURL<>+10(SB)/1, $0xfb
+DATA ds390CkURL<>+11(SB)/1, $0xfb
+DATA ds390CkURL<>+12(SB)/1, $0xfb
+DATA ds390CkURL<>+13(SB)/1, $0xfb
+DATA ds390CkURL<>+14(SB)/1, $0xfb
+DATA ds390CkURL<>+15(SB)/1, $0xfb
+GLOBL ds390CkURL<>(SB), RODATA|NOPTR, $16
 

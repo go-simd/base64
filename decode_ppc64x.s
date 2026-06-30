@@ -30,7 +30,7 @@ TEXT ·decodeBlocks(SB), NOSPLIT, $0-64
 	LXVB16X (R6)(R0), VS48
 	MOVD $dppcPshuf<>(SB), R6
 	LXVB16X (R6)(R0), VS49
-	MOVD $dppcC2f<>(SB), R6
+	MOVD $dppcCeq<>(SB), R6
 	LXVB16X (R6)(R0), VS50
 	MOVD $dppcZero<>(SB), R6
 	LXVB16X (R6)(R0), VS51
@@ -75,59 +75,79 @@ done:
 	MOVD R7, ret+56(FP)
 	RET
 
-DATA dppcLutLo<>+0(SB)/1, $0x15
-DATA dppcLutLo<>+1(SB)/1, $0x11
-DATA dppcLutLo<>+2(SB)/1, $0x11
-DATA dppcLutLo<>+3(SB)/1, $0x11
-DATA dppcLutLo<>+4(SB)/1, $0x11
-DATA dppcLutLo<>+5(SB)/1, $0x11
-DATA dppcLutLo<>+6(SB)/1, $0x11
-DATA dppcLutLo<>+7(SB)/1, $0x11
-DATA dppcLutLo<>+8(SB)/1, $0x11
-DATA dppcLutLo<>+9(SB)/1, $0x11
-DATA dppcLutLo<>+10(SB)/1, $0x13
-DATA dppcLutLo<>+11(SB)/1, $0x1a
-DATA dppcLutLo<>+12(SB)/1, $0x1b
-DATA dppcLutLo<>+13(SB)/1, $0x1b
-DATA dppcLutLo<>+14(SB)/1, $0x1b
-DATA dppcLutLo<>+15(SB)/1, $0x1a
-GLOBL dppcLutLo<>(SB), RODATA|NOPTR, $16
-
-DATA dppcLutHi<>+0(SB)/1, $0x10
-DATA dppcLutHi<>+1(SB)/1, $0x10
-DATA dppcLutHi<>+2(SB)/1, $0x01
-DATA dppcLutHi<>+3(SB)/1, $0x02
-DATA dppcLutHi<>+4(SB)/1, $0x04
-DATA dppcLutHi<>+5(SB)/1, $0x08
-DATA dppcLutHi<>+6(SB)/1, $0x04
-DATA dppcLutHi<>+7(SB)/1, $0x08
-DATA dppcLutHi<>+8(SB)/1, $0x10
-DATA dppcLutHi<>+9(SB)/1, $0x10
-DATA dppcLutHi<>+10(SB)/1, $0x10
-DATA dppcLutHi<>+11(SB)/1, $0x10
-DATA dppcLutHi<>+12(SB)/1, $0x10
-DATA dppcLutHi<>+13(SB)/1, $0x10
-DATA dppcLutHi<>+14(SB)/1, $0x10
-DATA dppcLutHi<>+15(SB)/1, $0x10
-GLOBL dppcLutHi<>(SB), RODATA|NOPTR, $16
-
-DATA dppcLutRoll<>+0(SB)/1, $0x00
-DATA dppcLutRoll<>+1(SB)/1, $0x10
-DATA dppcLutRoll<>+2(SB)/1, $0x13
-DATA dppcLutRoll<>+3(SB)/1, $0x04
-DATA dppcLutRoll<>+4(SB)/1, $0xbf
-DATA dppcLutRoll<>+5(SB)/1, $0xbf
-DATA dppcLutRoll<>+6(SB)/1, $0xb9
-DATA dppcLutRoll<>+7(SB)/1, $0xb9
-DATA dppcLutRoll<>+8(SB)/1, $0x00
-DATA dppcLutRoll<>+9(SB)/1, $0x00
-DATA dppcLutRoll<>+10(SB)/1, $0x00
-DATA dppcLutRoll<>+11(SB)/1, $0x00
-DATA dppcLutRoll<>+12(SB)/1, $0x00
-DATA dppcLutRoll<>+13(SB)/1, $0x00
-DATA dppcLutRoll<>+14(SB)/1, $0x00
-DATA dppcLutRoll<>+15(SB)/1, $0x00
-GLOBL dppcLutRoll<>(SB), RODATA|NOPTR, $16
+TEXT ·decodeBlocksURL(SB), NOSPLIT, $0-64
+	MOVD dst_base+0(FP), R3
+	MOVD src_base+24(FP), R4
+	MOVD n+48(FP), R5
+	MOVD $dppcLutLoURL<>(SB), R6
+	LXVB16X (R6)(R0), VS39
+	MOVD $dppcLutHiURL<>(SB), R6
+	LXVB16X (R6)(R0), VS40
+	MOVD $dppcLutRollURL<>(SB), R6
+	LXVB16X (R6)(R0), VS41
+	MOVD $dppcS6<>(SB), R6
+	LXVB16X (R6)(R0), VS42
+	MOVD $dppcS4<>(SB), R6
+	LXVB16X (R6)(R0), VS43
+	MOVD $dppcS2<>(SB), R6
+	LXVB16X (R6)(R0), VS44
+	MOVD $dppcM0<>(SB), R6
+	LXVB16X (R6)(R0), VS45
+	MOVD $dppcM1<>(SB), R6
+	LXVB16X (R6)(R0), VS46
+	MOVD $dppcM2<>(SB), R6
+	LXVB16X (R6)(R0), VS47
+	MOVD $dppcM3<>(SB), R6
+	LXVB16X (R6)(R0), VS48
+	MOVD $dppcPshuf<>(SB), R6
+	LXVB16X (R6)(R0), VS49
+	MOVD $dppcCeqURL<>(SB), R6
+	LXVB16X (R6)(R0), VS50
+	MOVD $dppcZero<>(SB), R6
+	LXVB16X (R6)(R0), VS51
+	MOVD $dppcC0f<>(SB), R6
+	LXVB16X (R6)(R0), VS52
+	VSPLTISB $4, V21
+	MOVD $0, R7
+	CMP R5, $0
+	BEQ done
+loop:
+	LXVB16X (R4)(R0), VS32
+	VAND V0, V20, V1
+	VSRB V0, V21, V2
+	VPERM V7, V7, V1, V3
+	VPERM V8, V8, V2, V4
+	VAND V3, V4, V5
+	VCMPEQUBCC V5, V19, V6
+	BC 4, 24, done
+	VCMPEQUB V0, V18, V6
+	MOVD $dppcCkURL<>(SB), R6
+	LXVB16X (R6)(R0), VS54
+	VAND V6, V22, V6
+	VADDUBM V2, V6, V6
+	VPERM V9, V9, V6, V6
+	VADDUBM V0, V6, V0
+	VSRW V0, V10, V1
+	VAND V1, V13, V1
+	VSRW V0, V11, V2
+	VAND V2, V14, V2
+	VOR V2, V1, V1
+	VSRW V0, V12, V2
+	VAND V2, V15, V2
+	VOR V2, V1, V1
+	VAND V0, V16, V2
+	VOR V2, V1, V1
+	VPERM V1, V1, V17, V1
+	STXVB16X VS33, (R3)(R0)
+	ADD $16, R4
+	ADD $12, R3
+	ADD $1, R7
+	ADD $-1, R5
+	CMP R5, $0
+	BNE loop
+done:
+	MOVD R7, ret+56(FP)
+	RET
 
 DATA dppcS6<>+0(SB)/1, $0x00
 DATA dppcS6<>+1(SB)/1, $0x00
@@ -273,24 +293,6 @@ DATA dppcPshuf<>+14(SB)/1, $0x00
 DATA dppcPshuf<>+15(SB)/1, $0x00
 GLOBL dppcPshuf<>(SB), RODATA|NOPTR, $16
 
-DATA dppcC2f<>+0(SB)/1, $0x2f
-DATA dppcC2f<>+1(SB)/1, $0x2f
-DATA dppcC2f<>+2(SB)/1, $0x2f
-DATA dppcC2f<>+3(SB)/1, $0x2f
-DATA dppcC2f<>+4(SB)/1, $0x2f
-DATA dppcC2f<>+5(SB)/1, $0x2f
-DATA dppcC2f<>+6(SB)/1, $0x2f
-DATA dppcC2f<>+7(SB)/1, $0x2f
-DATA dppcC2f<>+8(SB)/1, $0x2f
-DATA dppcC2f<>+9(SB)/1, $0x2f
-DATA dppcC2f<>+10(SB)/1, $0x2f
-DATA dppcC2f<>+11(SB)/1, $0x2f
-DATA dppcC2f<>+12(SB)/1, $0x2f
-DATA dppcC2f<>+13(SB)/1, $0x2f
-DATA dppcC2f<>+14(SB)/1, $0x2f
-DATA dppcC2f<>+15(SB)/1, $0x2f
-GLOBL dppcC2f<>(SB), RODATA|NOPTR, $16
-
 DATA dppcZero<>+0(SB)/1, $0x00
 DATA dppcZero<>+1(SB)/1, $0x00
 DATA dppcZero<>+2(SB)/1, $0x00
@@ -326,4 +328,166 @@ DATA dppcC0f<>+13(SB)/1, $0x0f
 DATA dppcC0f<>+14(SB)/1, $0x0f
 DATA dppcC0f<>+15(SB)/1, $0x0f
 GLOBL dppcC0f<>(SB), RODATA|NOPTR, $16
+
+DATA dppcLutLo<>+0(SB)/1, $0x15
+DATA dppcLutLo<>+1(SB)/1, $0x11
+DATA dppcLutLo<>+2(SB)/1, $0x11
+DATA dppcLutLo<>+3(SB)/1, $0x11
+DATA dppcLutLo<>+4(SB)/1, $0x11
+DATA dppcLutLo<>+5(SB)/1, $0x11
+DATA dppcLutLo<>+6(SB)/1, $0x11
+DATA dppcLutLo<>+7(SB)/1, $0x11
+DATA dppcLutLo<>+8(SB)/1, $0x11
+DATA dppcLutLo<>+9(SB)/1, $0x11
+DATA dppcLutLo<>+10(SB)/1, $0x13
+DATA dppcLutLo<>+11(SB)/1, $0x1a
+DATA dppcLutLo<>+12(SB)/1, $0x1b
+DATA dppcLutLo<>+13(SB)/1, $0x1b
+DATA dppcLutLo<>+14(SB)/1, $0x1b
+DATA dppcLutLo<>+15(SB)/1, $0x1a
+GLOBL dppcLutLo<>(SB), RODATA|NOPTR, $16
+
+DATA dppcLutHi<>+0(SB)/1, $0x10
+DATA dppcLutHi<>+1(SB)/1, $0x10
+DATA dppcLutHi<>+2(SB)/1, $0x01
+DATA dppcLutHi<>+3(SB)/1, $0x02
+DATA dppcLutHi<>+4(SB)/1, $0x04
+DATA dppcLutHi<>+5(SB)/1, $0x08
+DATA dppcLutHi<>+6(SB)/1, $0x04
+DATA dppcLutHi<>+7(SB)/1, $0x08
+DATA dppcLutHi<>+8(SB)/1, $0x10
+DATA dppcLutHi<>+9(SB)/1, $0x10
+DATA dppcLutHi<>+10(SB)/1, $0x10
+DATA dppcLutHi<>+11(SB)/1, $0x10
+DATA dppcLutHi<>+12(SB)/1, $0x10
+DATA dppcLutHi<>+13(SB)/1, $0x10
+DATA dppcLutHi<>+14(SB)/1, $0x10
+DATA dppcLutHi<>+15(SB)/1, $0x10
+GLOBL dppcLutHi<>(SB), RODATA|NOPTR, $16
+
+DATA dppcLutRoll<>+0(SB)/1, $0x00
+DATA dppcLutRoll<>+1(SB)/1, $0x10
+DATA dppcLutRoll<>+2(SB)/1, $0x13
+DATA dppcLutRoll<>+3(SB)/1, $0x04
+DATA dppcLutRoll<>+4(SB)/1, $0xbf
+DATA dppcLutRoll<>+5(SB)/1, $0xbf
+DATA dppcLutRoll<>+6(SB)/1, $0xb9
+DATA dppcLutRoll<>+7(SB)/1, $0xb9
+DATA dppcLutRoll<>+8(SB)/1, $0x00
+DATA dppcLutRoll<>+9(SB)/1, $0x00
+DATA dppcLutRoll<>+10(SB)/1, $0x00
+DATA dppcLutRoll<>+11(SB)/1, $0x00
+DATA dppcLutRoll<>+12(SB)/1, $0x00
+DATA dppcLutRoll<>+13(SB)/1, $0x00
+DATA dppcLutRoll<>+14(SB)/1, $0x00
+DATA dppcLutRoll<>+15(SB)/1, $0x00
+GLOBL dppcLutRoll<>(SB), RODATA|NOPTR, $16
+
+DATA dppcCeq<>+0(SB)/1, $0x2f
+DATA dppcCeq<>+1(SB)/1, $0x2f
+DATA dppcCeq<>+2(SB)/1, $0x2f
+DATA dppcCeq<>+3(SB)/1, $0x2f
+DATA dppcCeq<>+4(SB)/1, $0x2f
+DATA dppcCeq<>+5(SB)/1, $0x2f
+DATA dppcCeq<>+6(SB)/1, $0x2f
+DATA dppcCeq<>+7(SB)/1, $0x2f
+DATA dppcCeq<>+8(SB)/1, $0x2f
+DATA dppcCeq<>+9(SB)/1, $0x2f
+DATA dppcCeq<>+10(SB)/1, $0x2f
+DATA dppcCeq<>+11(SB)/1, $0x2f
+DATA dppcCeq<>+12(SB)/1, $0x2f
+DATA dppcCeq<>+13(SB)/1, $0x2f
+DATA dppcCeq<>+14(SB)/1, $0x2f
+DATA dppcCeq<>+15(SB)/1, $0x2f
+GLOBL dppcCeq<>(SB), RODATA|NOPTR, $16
+
+DATA dppcLutLoURL<>+0(SB)/1, $0x23
+DATA dppcLutLoURL<>+1(SB)/1, $0x03
+DATA dppcLutLoURL<>+2(SB)/1, $0x03
+DATA dppcLutLoURL<>+3(SB)/1, $0x03
+DATA dppcLutLoURL<>+4(SB)/1, $0x03
+DATA dppcLutLoURL<>+5(SB)/1, $0x03
+DATA dppcLutLoURL<>+6(SB)/1, $0x03
+DATA dppcLutLoURL<>+7(SB)/1, $0x03
+DATA dppcLutLoURL<>+8(SB)/1, $0x03
+DATA dppcLutLoURL<>+9(SB)/1, $0x03
+DATA dppcLutLoURL<>+10(SB)/1, $0x07
+DATA dppcLutLoURL<>+11(SB)/1, $0x1f
+DATA dppcLutLoURL<>+12(SB)/1, $0x1f
+DATA dppcLutLoURL<>+13(SB)/1, $0x1d
+DATA dppcLutLoURL<>+14(SB)/1, $0x1f
+DATA dppcLutLoURL<>+15(SB)/1, $0x0f
+GLOBL dppcLutLoURL<>(SB), RODATA|NOPTR, $16
+
+DATA dppcLutHiURL<>+0(SB)/1, $0x01
+DATA dppcLutHiURL<>+1(SB)/1, $0x01
+DATA dppcLutHiURL<>+2(SB)/1, $0x02
+DATA dppcLutHiURL<>+3(SB)/1, $0x04
+DATA dppcLutHiURL<>+4(SB)/1, $0x20
+DATA dppcLutHiURL<>+5(SB)/1, $0x10
+DATA dppcLutHiURL<>+6(SB)/1, $0x20
+DATA dppcLutHiURL<>+7(SB)/1, $0x08
+DATA dppcLutHiURL<>+8(SB)/1, $0x01
+DATA dppcLutHiURL<>+9(SB)/1, $0x01
+DATA dppcLutHiURL<>+10(SB)/1, $0x01
+DATA dppcLutHiURL<>+11(SB)/1, $0x01
+DATA dppcLutHiURL<>+12(SB)/1, $0x01
+DATA dppcLutHiURL<>+13(SB)/1, $0x01
+DATA dppcLutHiURL<>+14(SB)/1, $0x01
+DATA dppcLutHiURL<>+15(SB)/1, $0x01
+GLOBL dppcLutHiURL<>(SB), RODATA|NOPTR, $16
+
+DATA dppcLutRollURL<>+0(SB)/1, $0xe0
+DATA dppcLutRollURL<>+1(SB)/1, $0x00
+DATA dppcLutRollURL<>+2(SB)/1, $0x11
+DATA dppcLutRollURL<>+3(SB)/1, $0x04
+DATA dppcLutRollURL<>+4(SB)/1, $0xbf
+DATA dppcLutRollURL<>+5(SB)/1, $0xbf
+DATA dppcLutRollURL<>+6(SB)/1, $0xb9
+DATA dppcLutRollURL<>+7(SB)/1, $0xb9
+DATA dppcLutRollURL<>+8(SB)/1, $0x00
+DATA dppcLutRollURL<>+9(SB)/1, $0x00
+DATA dppcLutRollURL<>+10(SB)/1, $0x00
+DATA dppcLutRollURL<>+11(SB)/1, $0x00
+DATA dppcLutRollURL<>+12(SB)/1, $0x00
+DATA dppcLutRollURL<>+13(SB)/1, $0x00
+DATA dppcLutRollURL<>+14(SB)/1, $0x00
+DATA dppcLutRollURL<>+15(SB)/1, $0x00
+GLOBL dppcLutRollURL<>(SB), RODATA|NOPTR, $16
+
+DATA dppcCeqURL<>+0(SB)/1, $0x5f
+DATA dppcCeqURL<>+1(SB)/1, $0x5f
+DATA dppcCeqURL<>+2(SB)/1, $0x5f
+DATA dppcCeqURL<>+3(SB)/1, $0x5f
+DATA dppcCeqURL<>+4(SB)/1, $0x5f
+DATA dppcCeqURL<>+5(SB)/1, $0x5f
+DATA dppcCeqURL<>+6(SB)/1, $0x5f
+DATA dppcCeqURL<>+7(SB)/1, $0x5f
+DATA dppcCeqURL<>+8(SB)/1, $0x5f
+DATA dppcCeqURL<>+9(SB)/1, $0x5f
+DATA dppcCeqURL<>+10(SB)/1, $0x5f
+DATA dppcCeqURL<>+11(SB)/1, $0x5f
+DATA dppcCeqURL<>+12(SB)/1, $0x5f
+DATA dppcCeqURL<>+13(SB)/1, $0x5f
+DATA dppcCeqURL<>+14(SB)/1, $0x5f
+DATA dppcCeqURL<>+15(SB)/1, $0x5f
+GLOBL dppcCeqURL<>(SB), RODATA|NOPTR, $16
+
+DATA dppcCkURL<>+0(SB)/1, $0xfb
+DATA dppcCkURL<>+1(SB)/1, $0xfb
+DATA dppcCkURL<>+2(SB)/1, $0xfb
+DATA dppcCkURL<>+3(SB)/1, $0xfb
+DATA dppcCkURL<>+4(SB)/1, $0xfb
+DATA dppcCkURL<>+5(SB)/1, $0xfb
+DATA dppcCkURL<>+6(SB)/1, $0xfb
+DATA dppcCkURL<>+7(SB)/1, $0xfb
+DATA dppcCkURL<>+8(SB)/1, $0xfb
+DATA dppcCkURL<>+9(SB)/1, $0xfb
+DATA dppcCkURL<>+10(SB)/1, $0xfb
+DATA dppcCkURL<>+11(SB)/1, $0xfb
+DATA dppcCkURL<>+12(SB)/1, $0xfb
+DATA dppcCkURL<>+13(SB)/1, $0xfb
+DATA dppcCkURL<>+14(SB)/1, $0xfb
+DATA dppcCkURL<>+15(SB)/1, $0xfb
+GLOBL dppcCkURL<>(SB), RODATA|NOPTR, $16
 

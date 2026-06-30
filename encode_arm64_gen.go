@@ -43,23 +43,49 @@ import (
 	"github.com/go-asmgen/asmgen/emit"
 )
 
-// alphabet is StdEncoding's A-Za-z0-9+/ (64 bytes, the VTBL lookup table).
-func alphabet() []byte {
+// alphabet returns the 64-byte VTBL lookup table: StdEncoding's A-Za-z0-9+/, or
+// the URL-safe A-Za-z0-9-_ when url is set (the two variants differ only in the
+// last two entries, indices 62/63).
+func alphabet(url bool) []byte {
 	const s = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-	return []byte(s)
+	b := []byte(s)
+	if url {
+		b[62] = '-'
+		b[63] = '_'
+	}
+	return b
 }
+
+type variant struct {
+	suffix string
+	url    bool
+}
+
+var variants = []variant{{"", false}, {"URL", true}}
 
 func main() {
 	f := emit.NewFile("arm64")
-
-	// 64-byte alphabet table, loaded into V8..V11 (the four VTBL source regs).
-	alpha := f.Data("alpha", alphabet())
 
 	sig := abi.LayoutArgs(
 		[]abi.Arg{abi.Slice("dst"), abi.Slice("src"), abi.Scalar("n", abi.Int64)},
 		nil,
 	)
-	b := arm64.NewFunc("encodeBlocks", sig, 0)
+	for _, vr := range variants {
+		genVariant(f, vr, sig)
+	}
+
+	if err := os.WriteFile("encode_arm64.s", []byte(f.String()), 0o644); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Println("wrote encode_arm64.s")
+}
+
+func genVariant(f *emit.File, vr variant, sig abi.Signature) {
+	// 64-byte alphabet table, loaded into V8..V11 (the four VTBL source regs).
+	alpha := f.Data("alpha"+vr.suffix, alphabet(vr.url))
+
+	b := arm64.NewFunc("encodeBlocks"+vr.suffix, sig, 0)
 	b.LoadArg("dst_base", "R0").
 		LoadArg("src_base", "R1").
 		LoadArg("n", "R2").
@@ -94,10 +120,4 @@ func main() {
 		Label("done").
 		Ret()
 	f.Add(b.Func())
-
-	if err := os.WriteFile("encode_arm64.s", []byte(f.String()), 0o644); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	fmt.Println("wrote encode_arm64.s")
 }
