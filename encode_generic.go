@@ -2,14 +2,15 @@
 
 package base64
 
-// On an arch with no SIMD kernel (riscv64, loong64, …) the *SIMDMin thresholds
-// are 0, so Encode/Decode never take the short-circuit and always fall through to
-// encodeSIMD/decodeSIMD, which report no progress; the whole input goes to the
-// standard library. (Keeping the thresholds at 0 — rather than "infinity" — leaves
-// these stubs on the executed path so coverage stays exact.)
+// On an arch with no SIMD kernel (riscv64, loong64, …) both dispatch paths must
+// stay exercised by the test suite so coverage is exact: the *SIMDMin thresholds
+// match the SSE-class kernels (16 to encode, 16+8 to decode) so short inputs take
+// the stdlib short-circuit in Encode/Decode while larger ones fall through to the
+// encodeSIMD/decodeSIMD stubs below — which report no progress, so the whole input
+// goes to the standard library either way.
 const (
-	encodeSIMDMin = 0
-	decodeSIMDMin = 0
+	encodeSIMDMin = 16
+	decodeSIMDMin = 16 + 8
 )
 
 // encodeSIMD has no SIMD kernel on this arch; the whole input goes to the
