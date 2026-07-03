@@ -4,10 +4,7 @@
 
 package base64
 
-import (
-	"encoding/binary"
-	"unsafe"
-)
+import "unsafe"
 
 // stdCompactLUT[c] is 0 for a standard base64 alphabet byte (A-Za-z0-9+/) and
 // 0xFF for every other byte. Compact keeps exactly the bytes whose entry is 0.
@@ -71,9 +68,11 @@ func compact(dst, src []byte) int {
 			stdCompactLUT[src[i+4]] | stdCompactLUT[src[i+5]] |
 			stdCompactLUT[src[i+6]] | stdCompactLUT[src[i+7]]
 		if or&0xC0 == 0 {
-			// Whole 8-byte window is alphabet: move it with one load/store. m<=i
-			// and i+8<=n, so dst[m:m+8] stays within dst (sized >= len(src)).
-			binary.LittleEndian.PutUint64(dst[m:], binary.LittleEndian.Uint64(src[i:]))
+			// Whole 8-byte window is alphabet: move it with one 8-byte load/store.
+			// m <= i (kept count never exceeds bytes consumed) and i+8 <= n, so both
+			// dst[m:m+8] and src[i:i+8] stay in bounds (dst is sized >= len(src)); the
+			// leading index expressions are bounds-checked, the 8-byte copy is not.
+			*(*uint64)(unsafe.Pointer(&dst[m])) = *(*uint64)(unsafe.Pointer(&src[i]))
 			m += 8
 			i += 8
 			continue
