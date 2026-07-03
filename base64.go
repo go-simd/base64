@@ -63,6 +63,13 @@ func (enc *Encoding) DecodedLen(n int) int { return enc.std.DecodedLen(n) }
 // padded quantum and any block containing an invalid byte — is handed to
 // encoding/base64 so the result is byte- and error-identical (CorruptInputError
 // offsets match exactly).
+//
+// Decode may be used in place: dst and src may share the same backing array as
+// long as &dst[0] == &src[0] (dst a prefix of src). Decoding consumes four input
+// bytes per three output bytes and never reads a byte after overwriting it, so
+// the write cursor always trails the read cursor and the result is unaffected —
+// letting a caller decode a de-spaced buffer (see Compact) without a second
+// allocation. TestDecodeInPlace pins this guarantee.
 func (enc *Encoding) Decode(dst, src []byte) (int, error) {
 	// Below decodeSIMDMin src chars no arch's kernel runs (amd64 SSE/ppc64le/s390x
 	// 16+8, arm64 NEON 64), so hand short inputs straight to the stdlib and skip
