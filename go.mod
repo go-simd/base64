@@ -7,4 +7,4 @@ require (
 	github.com/emmansun/base64 v0.6.2
 )
 
-require golang.org/x/sys v0.28.0
+require golang.org/x/sys v0.47.0
