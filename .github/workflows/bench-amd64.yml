@@ -25,7 +25,7 @@ jobs:
       - name: parity benchmark (go-simd vs stdlib vs emmansun)
         run: |
           go test -run '^$' -bench 'Parity' -benchmem -count=6 . | tee bench-amd64.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bench-amd64
           path: bench-amd64.txt
