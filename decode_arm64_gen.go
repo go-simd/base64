@@ -32,8 +32,9 @@
 //
 // and a single interleaving store VST3.P writes the 48 bytes back in order.
 //
-// VTBX, VCMHS and VUMAXV are not recognised by the released arm64 assembler, so
-// they are emitted as raw WORD encodings (the same ones emmansun uses).
+// VTBX, VCMHS and VUMAXV are emitted as mnemonics; the Go assembler has accepted
+// them since Go 1.27 (earlier releases did not, and this kernel used WORD
+// encodings).
 //
 // Run: go run decode_arm64_gen.go
 package main
@@ -141,25 +142,25 @@ func genVariant(f *emit.File, vr variant, sig abi.Signature) {
 		// Second-table extend (chars 0x40..0x7F): subtract 0x40, VTBX keeps the
 		// first lookup where it already matched.
 		Raw("VSUB V7.B16, V20.B16, V20.B16").
-		Raw("WORD $0x4e147180"). // VTBX V20.B16, [V12.B16,V13.B16,V14.B16,V15.B16], V0.B16
+		Raw("VTBX V20.B16, [V12.B16, V13.B16, V14.B16, V15.B16], V0.B16").
 		Raw("VSUB V7.B16, V21.B16, V21.B16").
-		Raw("WORD $0x4e157181"). // VTBX V21.B16, [...], V1.B16
+		Raw("VTBX V21.B16, [V12.B16, V13.B16, V14.B16, V15.B16], V1.B16").
 		Raw("VSUB V7.B16, V22.B16, V22.B16").
-		Raw("WORD $0x4e167182"). // VTBX V22.B16, [...], V2.B16
+		Raw("VTBX V22.B16, [V12.B16, V13.B16, V14.B16, V15.B16], V2.B16").
 		Raw("VSUB V7.B16, V23.B16, V23.B16").
-		Raw("WORD $0x4e177183"). // VTBX V23.B16, [...], V3.B16
+		Raw("VTBX V23.B16, [V12.B16, V13.B16, V14.B16, V15.B16], V3.B16").
 		// Validity: any value >= 0x40 is invalid. VCMHS V7, Vk -> 0xFF where Vk>=0x40.
-		Raw("WORD $0x6e273c10"). // VCMHS V7.B16, V0.B16, V16.B16
-		Raw("WORD $0x6e273c31"). // VCMHS V7.B16, V1.B16, V17.B16
-		Raw("WORD $0x6e273c52"). // VCMHS V7.B16, V2.B16, V18.B16
-		Raw("WORD $0x6e273c73"). // VCMHS V7.B16, V3.B16, V19.B16
+		Raw("VCMHS V7.B16, V0.B16, V16.B16").
+		Raw("VCMHS V7.B16, V1.B16, V17.B16").
+		Raw("VCMHS V7.B16, V2.B16, V18.B16").
+		Raw("VCMHS V7.B16, V3.B16, V19.B16").
 		Raw("VORR V17.B16, V16.B16, V16.B16").
 		Raw("VORR V18.B16, V16.B16, V16.B16").
 		Raw("VORR V19.B16, V16.B16, V16.B16").
 		// Fold in the combined high-bit (>=0x80) mask.
 		Raw("VORR V24.B16, V16.B16, V16.B16").
 		// Reduce: VUMAXV -> max byte; nonzero means some invalid byte -> stop.
-		Raw("WORD $0x6e30aa11"). // VUMAXV V16.B16, V17
+		Raw("VUMAXV V16.B16, V17").
 		Raw("VMOV V17.B[0], R6").
 		Raw("CBNZ R6, done").
 		// Pack 4x6-bit -> 3 bytes (pure shifts).
